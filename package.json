@@ -44,36 +44,25 @@
     "views": {
       "agentTracing": [
         {
-          "id": "agentTracing.hooks",
-          "name": "Hooks"
-        },
-        {
-          "id": "agentTracing.stacks",
-          "name": "Observability"
+          "id": "agentTracing.solutions",
+          "name": "Tracing Solutions"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "agentTracing.stacks",
-        "contents": "Langfuse observability stack is not set up yet.\n[$(rocket) Run Full Setup](command:agentTracing.setup)\nRequires Docker to be installed and running.",
-        "when": "agentTracing.needsSetup"
-      }
-    ],
     "commands": [
       {
         "command": "agentTracing.setup",
         "title": "Agent Tracing: Full Setup",
-        "icon": "$(rocket)"
+        "icon": "$(play)"
       },
       {
         "command": "agentTracing.startStack",
-        "title": "Agent Tracing: Start Observability Stack",
+        "title": "Agent Tracing: Start Stack",
         "icon": "$(play)"
       },
       {
         "command": "agentTracing.stopStack",
-        "title": "Agent Tracing: Stop Observability Stack",
+        "title": "Agent Tracing: Stop Stack",
         "icon": "$(debug-stop)"
       },
       {
@@ -82,14 +71,9 @@
         "icon": "$(link-external)"
       },
       {
-        "command": "agentTracing.installHooks",
-        "title": "Agent Tracing: Install Hooks",
-        "icon": "$(add)"
-      },
-      {
-        "command": "agentTracing.removeHooks",
-        "title": "Agent Tracing: Remove Hooks",
-        "icon": "$(trash)"
+        "command": "agentTracing.showLoginInfo",
+        "title": "Agent Tracing: Show Login Info",
+        "icon": "$(key)"
       },
       {
         "command": "agentTracing.refresh",
@@ -97,89 +81,64 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "agentTracing.showLoginInfo",
-        "title": "Agent Tracing: Show Langfuse Login Info",
-        "icon": "$(key)"
+        "command": "agentTracing.enableHook",
+        "title": "Agent Tracing: Enable Hook",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "agentTracing.disableHook",
+        "title": "Agent Tracing: Disable Hook",
+        "icon": "$(close)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "agentTracing.setup",
-          "when": "view == agentTracing.stacks",
-          "group": "navigation@1"
-        },
-        {
-          "command": "agentTracing.startStack",
-          "when": "view == agentTracing.stacks",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agentTracing.stopStack",
-          "when": "view == agentTracing.stacks",
-          "group": "navigation@3"
-        },
-        {
-          "command": "agentTracing.openDashboard",
-          "when": "view == agentTracing.stacks",
-          "group": "navigation@4"
-        },
-        {
-          "command": "agentTracing.showLoginInfo",
-          "when": "view == agentTracing.stacks",
-          "group": "overflow"
-        },
-        {
           "command": "agentTracing.refresh",
-          "when": "view == agentTracing.stacks",
-          "group": "navigation@5"
-        },
-        {
-          "command": "agentTracing.installHooks",
-          "when": "view == agentTracing.hooks",
+          "when": "view == agentTracing.solutions",
           "group": "navigation@1"
-        },
-        {
-          "command": "agentTracing.removeHooks",
-          "when": "view == agentTracing.hooks",
-          "group": "navigation@2"
-        },
-        {
-          "command": "agentTracing.refresh",
-          "when": "view == agentTracing.hooks",
-          "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
-          "command": "agentTracing.startStack",
-          "when": "view == agentTracing.stacks && viewItem == stack-stopped",
-          "group": "inline"
-        },
-        {
-          "command": "agentTracing.stopStack",
-          "when": "view == agentTracing.stacks && viewItem == stack-running",
-          "group": "inline"
-        },
-        {
-          "command": "agentTracing.openDashboard",
-          "when": "view == agentTracing.stacks && viewItem == stack-running",
-          "group": "inline"
+          "command": "agentTracing.setup",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-not-configured",
+          "group": "inline@1"
         },
         {
           "command": "agentTracing.setup",
-          "when": "view == agentTracing.stacks && viewItem == stack-not-installed",
-          "group": "inline"
+          "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
+          "group": "inline@1"
         },
         {
-          "command": "agentTracing.removeHooks",
-          "when": "view == agentTracing.hooks && viewItem =~ /hook-installed/",
-          "group": "inline"
+          "command": "agentTracing.showLoginInfo",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
+          "group": "inline@1"
         },
         {
-          "command": "agentTracing.installHooks",
-          "when": "view == agentTracing.hooks && viewItem =~ /hook-not-installed/",
-          "group": "inline"
+          "command": "agentTracing.stopStack",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentTracing.openDashboard",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
+          "group": "inline@3"
+        },
+        {
+          "command": "agentTracing.startStack",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.disableHook",
+          "when": "view == agentTracing.solutions && viewItem =~ /^agent-tracing-/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.enableHook",
+          "when": "view == agentTracing.solutions && viewItem =~ /^agent-not-tracing-/",
+          "group": "inline@1"
         }
       ]
     },
