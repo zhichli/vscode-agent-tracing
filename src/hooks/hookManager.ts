@@ -3,20 +3,24 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { LangfuseManager } from "../stacks/langfuseManager";
-import { exec } from "../exec";
+
+export type AgentTarget = "vscode" | "claude";
 
 export interface HookStatus {
   id: string;
   label: string;
-  target: "vscode" | "claude-code";
+  target: AgentTarget;
   installed: boolean;
-  scriptPath: string;
-  configPath: string;
 }
 
 /**
- * Manages installation and removal of observability hook scripts
- * for both VS Code Copilot and Claude Code.
+ * Manages the shared hook script and per-agent config files.
+ *
+ * File layout (per spec):
+ *   ~/.claude/hooks/langfuse_hook.py          — shared script (installed once)
+ *   ~/.claude/hooks/.langfuse_config.json     — keys + log_dir
+ *   {workspace}/.github/hooks/agent-tracing.json — VS Code hook config
+ *   ~/.claude/settings.json                   — Claude hook entry + root env
  */
 export class HookManager {
   constructor(
@@ -27,46 +31,104 @@ export class HookManager {
 
   // ---- public API ----
 
+  /** Install shared script + config + enable both agents. */
   async installAll(): Promise<void> {
-    await this.installVSCodeHook();
-    await this.installClaudeCodeHook();
+    this.installSharedScript();
+    this.writeLangfuseConfig();
+    this.enableAgent("vscode");
+    this.enableAgent("claude");
   }
 
-  async removeAll(): Promise<void> {
-    this.removeVSCodeHook();
-    this.removeClaudeCodeHook();
-  }
-
+  /** Get per-agent hook statuses. */
   async getStatuses(): Promise<HookStatus[]> {
-    return [this.vsCodeHookStatus(), this.claudeCodeHookStatus()];
+    return [this.vsCodeStatus(), this.claudeStatus()];
   }
 
-  // ---- VS Code hook ----
+  /** Enable a single agent's hook config (script must already exist). */
+  enableAgent(target: AgentTarget): void {
+    this.installSharedScript();
+    this.writeLangfuseConfig();
 
-  private async installVSCodeHook(): Promise<void> {
-    const ws = this.workspaceRoot();
-    if (!ws) {
-      throw new Error("No workspace folder open.");
+    if (target === "vscode") {
+      this.writeVSCodeConfig();
+    } else {
+      this.writeClaudeConfig();
     }
+  }
 
-    // 1. Copy the hook Python script
-    const destDir = path.join(ws, ".github", "hooks");
+  /** Disable a single agent's hook config. Script + .langfuse_config.json stay on disk. */
+  disableAgent(target: AgentTarget): void {
+    if (target === "vscode") {
+      this.removeVSCodeConfig();
+    } else {
+      this.removeClaudeConfig();
+    }
+  }
+
+  /** Remove everything (script + config + both agent configs). */
+  async removeAll(): Promise<void> {
+    this.removeVSCodeConfig();
+    this.removeClaudeConfig();
+    this.safeUnlink(this.sharedScriptPath);
+    this.safeUnlink(this.langfuseConfigPath);
+  }
+
+  // ---- shared script ----
+
+  private get sharedScriptPath(): string {
+    return path.join(os.homedir(), ".claude", "hooks", "langfuse_hook.py");
+  }
+
+  private get langfuseConfigPath(): string {
+    return path.join(os.homedir(), ".claude", "hooks", ".langfuse_config.json");
+  }
+
+  private installSharedScript(): void {
+    const destDir = path.dirname(this.sharedScriptPath);
     fs.mkdirSync(destDir, { recursive: true });
 
-    const scriptSrc = this.resourcePath("hooks", "langfuse_vscode_hook.py");
-    const scriptDest = path.join(destDir, "langfuse_vscode_hook.py");
-    fs.copyFileSync(scriptSrc, scriptDest);
-    fs.chmodSync(scriptDest, 0o755);
-    this.log(`Installed VS Code hook script → ${scriptDest}`);
+    const src = this.resourcePath("hooks", "langfuse_hook.py");
+    fs.copyFileSync(src, this.sharedScriptPath);
+    fs.chmodSync(this.sharedScriptPath, 0o755);
+    this.log(`Installed shared hook script → ${this.sharedScriptPath}`);
+  }
 
-    // 2. Write / merge hook JSON config with env vars embedded for zero-config
-    const configPath = path.join(destDir, "agent-tracing.json");
+  private writeLangfuseConfig(): void {
+    const logDir = path.join(this.context.globalStorageUri.fsPath, "logs");
+    const config = {
+      public_key: this.langfuse.publicKey,
+      secret_key: this.langfuse.secretKey,
+      host: this.langfuse.dashboardUrl,
+      log_dir: logDir,
+    };
+    fs.mkdirSync(path.dirname(this.langfuseConfigPath), { recursive: true });
+    fs.writeFileSync(this.langfuseConfigPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+    this.log(`Wrote .langfuse_config.json → ${this.langfuseConfigPath}`);
+  }
+
+  // ---- VS Code Copilot Chat hook ----
+
+  private vsCodeConfigPath(): string | undefined {
+    const ws = this.workspaceRoot();
+    if (!ws) return undefined;
+    return path.join(ws, ".github", "hooks", "agent-tracing.json");
+  }
+
+  private writeVSCodeConfig(): void {
+    const configPath = this.vsCodeConfigPath();
+    if (!configPath) {
+      this.log("No workspace open — skipping VS Code hook config.");
+      return;
+    }
+
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+
     const hookConfig = {
       hooks: {
         Stop: [
           {
             type: "command",
-            command: "python3 .github/hooks/langfuse_vscode_hook.py",
+            command: "python3 ~/.claude/hooks/langfuse_hook.py",
             timeout: 60,
             env: {
               TRACE_TO_LANGFUSE: "true",
@@ -80,58 +142,34 @@ export class HookManager {
     };
     fs.writeFileSync(configPath, JSON.stringify(hookConfig, null, 2) + "\n", "utf-8");
     this.log(`Wrote VS Code hook config → ${configPath}`);
-
-    // 3. Write env vars to .claude/settings.local.json (shared format)
-    this.writeEnvSettings(ws);
   }
 
-  private removeVSCodeHook(): void {
-    const ws = this.workspaceRoot();
-    if (!ws) return;
-
-    const scriptPath = path.join(ws, ".github", "hooks", "langfuse_vscode_hook.py");
-    const configPath = path.join(ws, ".github", "hooks", "agent-tracing.json");
-
-    this.safeUnlink(scriptPath);
-    this.safeUnlink(configPath);
-    this.log("Removed VS Code hook.");
+  private removeVSCodeConfig(): void {
+    const configPath = this.vsCodeConfigPath();
+    if (configPath) {
+      this.safeUnlink(configPath);
+      this.log("Removed VS Code hook config (agent-tracing.json).");
+    }
   }
 
-  private vsCodeHookStatus(): HookStatus {
-    const ws = this.workspaceRoot() ?? "";
-    const scriptPath = path.join(ws, ".github", "hooks", "langfuse_vscode_hook.py");
-    const configPath = path.join(ws, ".github", "hooks", "agent-tracing.json");
+  private vsCodeStatus(): HookStatus {
+    const configPath = this.vsCodeConfigPath();
     return {
-      id: "vscode-stop",
-      label: "VS Code Stop Hook",
+      id: "agent-vscode",
+      label: "GitHub Copilot Chat",
       target: "vscode",
-      installed: fs.existsSync(scriptPath) && fs.existsSync(configPath),
-      scriptPath,
-      configPath,
+      installed: configPath ? fs.existsSync(configPath) : false,
     };
   }
 
   // ---- Claude Code hook ----
 
-  private async installClaudeCodeHook(): Promise<void> {
-    const claudeDir = path.join(os.homedir(), ".claude");
-    if (!fs.existsSync(claudeDir)) {
-      this.log("~/.claude directory not found — skipping Claude Code hook.");
-      return;
-    }
+  private get claudeSettingsPath(): string {
+    return path.join(os.homedir(), ".claude", "settings.json");
+  }
 
-    // 1. Copy the hook Python script
-    const hooksDir = path.join(claudeDir, "hooks");
-    fs.mkdirSync(hooksDir, { recursive: true });
-
-    const scriptSrc = this.resourcePath("hooks", "langfuse_claude_hook.py");
-    const scriptDest = path.join(hooksDir, "langfuse_hook.py");
-    fs.copyFileSync(scriptSrc, scriptDest);
-    fs.chmodSync(scriptDest, 0o755);
-    this.log(`Installed Claude Code hook script → ${scriptDest}`);
-
-    // 2. Merge hook into ~/.claude/settings.json
-    const settingsPath = path.join(claudeDir, "settings.json");
+  private writeClaudeConfig(): void {
+    const settingsPath = this.claudeSettingsPath;
     const settings = this.readJsonSafe(settingsPath);
 
     if (!settings.hooks) settings.hooks = {};
@@ -139,109 +177,88 @@ export class HookManager {
 
     const cmd = "python3 ~/.claude/hooks/langfuse_hook.py";
     const alreadyRegistered = settings.hooks.Stop.some(
-      (h: any) =>
-        (h.hooks ?? [h]).some((inner: any) => inner.command === cmd),
+      (h: any) => {
+        const entries = h.hooks ?? [h];
+        return entries.some((inner: any) => inner.command === cmd);
+      },
     );
 
     if (!alreadyRegistered) {
-      // Claude Code hook format: Stop is an array of { hooks: [...] } wrappers
-      // or flat { type, command } entries — VS Code accepts both.
       settings.hooks.Stop.push({
         type: "command",
         command: cmd,
       });
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-      this.log(`Registered hook in ${settingsPath}`);
-    } else {
-      this.log("Claude Code hook already registered.");
     }
 
-    // 3. Write env vars to workspace .claude/settings.local.json
-    const ws = this.workspaceRoot();
-    if (ws) {
-      this.writeEnvSettings(ws);
-    }
-  }
-
-  private removeClaudeCodeHook(): void {
-    const claudeDir = path.join(os.homedir(), ".claude");
-    const scriptPath = path.join(claudeDir, "hooks", "langfuse_hook.py");
-    this.safeUnlink(scriptPath);
-
-    // Remove from settings.json
-    const settingsPath = path.join(claudeDir, "settings.json");
-    if (fs.existsSync(settingsPath)) {
-      try {
-        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        if (settings.hooks?.Stop) {
-          settings.hooks.Stop = settings.hooks.Stop.filter(
-            (h: any) => {
-              const entries = h.hooks ?? [h];
-              return !entries.some(
-                (inner: any) =>
-                  inner.command?.includes("langfuse_hook.py"),
-              );
-            },
-          );
-          fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-        }
-      } catch {
-        // ignore
-      }
-    }
-    this.log("Removed Claude Code hook.");
-  }
-
-  private claudeCodeHookStatus(): HookStatus {
-    const claudeDir = path.join(os.homedir(), ".claude");
-    const scriptPath = path.join(claudeDir, "hooks", "langfuse_hook.py");
-    const configPath = path.join(claudeDir, "settings.json");
-
-    let installed = false;
-    if (fs.existsSync(scriptPath) && fs.existsSync(configPath)) {
-      try {
-        const settings = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-        installed = (settings.hooks?.Stop ?? []).some(
-          (h: any) => {
-            const entries = h.hooks ?? [h];
-            return entries.some(
-              (inner: any) =>
-                inner.command?.includes("langfuse_hook.py"),
-            );
-          },
-        );
-      } catch {
-        // corrupt settings — treat as not installed
-      }
-    }
-
-    return {
-      id: "claude-code-stop",
-      label: "Claude Code Stop Hook",
-      target: "claude-code",
-      installed,
-      scriptPath,
-      configPath,
-    };
-  }
-
-  // ---- env settings ----
-
-  private writeEnvSettings(wsRoot: string): void {
-    const settingsDir = path.join(wsRoot, ".claude");
-    fs.mkdirSync(settingsDir, { recursive: true });
-
-    const settingsPath = path.join(settingsDir, "settings.local.json");
-    const settings = this.readJsonSafe(settingsPath);
-
+    // Merge env vars into root env (per spec)
     if (!settings.env) settings.env = {};
     settings.env.TRACE_TO_LANGFUSE = "true";
     settings.env.LANGFUSE_PUBLIC_KEY = this.langfuse.publicKey;
     settings.env.LANGFUSE_SECRET_KEY = this.langfuse.secretKey;
     settings.env.LANGFUSE_HOST = this.langfuse.dashboardUrl;
 
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-    this.log(`Wrote env settings → ${settingsPath}`);
+    this.log(`Wrote Claude hook config → ${settingsPath}`);
+  }
+
+  private removeClaudeConfig(): void {
+    const settingsPath = this.claudeSettingsPath;
+    if (!fs.existsSync(settingsPath)) return;
+
+    try {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+      if (settings.hooks?.Stop) {
+        settings.hooks.Stop = settings.hooks.Stop.filter(
+          (h: any) => {
+            const entries = h.hooks ?? [h];
+            return !entries.some(
+              (inner: any) => inner.command?.includes("langfuse_hook.py"),
+            );
+          },
+        );
+      }
+      if (settings.env) {
+        delete settings.env.TRACE_TO_LANGFUSE;
+        delete settings.env.LANGFUSE_PUBLIC_KEY;
+        delete settings.env.LANGFUSE_SECRET_KEY;
+        delete settings.env.LANGFUSE_HOST;
+        if (Object.keys(settings.env).length === 0) {
+          delete settings.env;
+        }
+      }
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+      this.log("Removed Claude hook entry from settings.json.");
+    } catch {
+      // ignore corrupt file
+    }
+  }
+
+  private claudeStatus(): HookStatus {
+    const settingsPath = this.claudeSettingsPath;
+    let installed = false;
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        installed = (settings.hooks?.Stop ?? []).some(
+          (h: any) => {
+            const entries = h.hooks ?? [h];
+            return entries.some(
+              (inner: any) => inner.command?.includes("langfuse_hook.py"),
+            );
+          },
+        );
+      } catch {
+        // corrupt settings
+      }
+    }
+
+    return {
+      id: "agent-claude",
+      label: "Claude",
+      target: "claude",
+      installed,
+    };
   }
 
   // ---- helpers ----
