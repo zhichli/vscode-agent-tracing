@@ -110,10 +110,14 @@ export class LangfuseManager {
     );
   }
 
-  /** Show a notification with the auto-seeded login credentials. */
+  /** Show a modal dialog with the auto-seeded login credentials. */
   async showLoginInfo(): Promise<void> {
-    const msg = `Langfuse login — email: ${LANGFUSE_DEFAULT_USER.email}  password: ${LANGFUSE_DEFAULT_USER.password}`;
-    const action = await vscode.window.showInformationMessage(msg, "Copy Email", "Copy Password");
+    const action = await vscode.window.showInformationMessage(
+      `Langfuse Login\n\nEmail: ${LANGFUSE_DEFAULT_USER.email}\nPassword: ${LANGFUSE_DEFAULT_USER.password}`,
+      { modal: true },
+      "Copy Email",
+      "Copy Password",
+    );
     if (action === "Copy Email") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
     } else if (action === "Copy Password") {

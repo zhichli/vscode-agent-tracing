@@ -1,18 +1,16 @@
 import * as vscode from "vscode";
 import { LangfuseManager } from "./stacks/langfuseManager";
-import { HookManager } from "./hooks/hookManager";
-import { HooksTreeProvider } from "./views/hooksTreeProvider";
-import { StacksTreeProvider } from "./views/stacksTreeProvider";
+import { HookManager, AgentTarget } from "./hooks/hookManager";
+import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Agent Tracing");
   const langfuse = new LangfuseManager(context, output);
   const hookManager = new HookManager(context, langfuse, output);
 
-  const hooksProvider = new HooksTreeProvider(hookManager);
-  const stacksProvider = new StacksTreeProvider(langfuse);
+  const provider = new TracingSolutionsTreeProvider(langfuse, hookManager);
 
-  // Status bar item for transient feedback (less noisy than toasts)
+  // Status bar item for transient feedback
   const statusItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
     0,
@@ -27,14 +25,14 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("agentTracing.hooks", hooksProvider),
-    vscode.window.registerTreeDataProvider("agentTracing.stacks", stacksProvider),
+    vscode.window.registerTreeDataProvider("agentTracing.solutions", provider),
     output,
   );
 
   // --- Commands ---
 
   context.subscriptions.push(
+    // Full Setup: hooks → pip → docker → start → health → open dashboard
     vscode.commands.registerCommand("agentTracing.setup", async () => {
       await vscode.window.withProgress(
         {
@@ -50,22 +48,12 @@ export function activate(context: vscode.ExtensionContext) {
             progress.report({ message: "Installing hooks…" });
             await hookManager.installAll();
 
-            stacksProvider.refresh();
-            hooksProvider.refresh();
-            updateNeedsSetup(langfuse);
+            provider.refresh();
 
-            progress.report({ message: "Done!" });
-            const open = await vscode.window.showInformationMessage(
-              "Agent Tracing setup complete! Langfuse v3 is running and hooks are installed. " +
-              "Login: local@agent-tracing.dev / agenttracing",
-              "Open Dashboard",
-              "Show Login Info",
-            );
-            if (open === "Open Dashboard") {
-              await langfuse.openDashboard();
-            } else if (open === "Show Login Info") {
-              await langfuse.showLoginInfo();
-            }
+            progress.report({ message: "Opening dashboard…" });
+            await langfuse.openDashboard();
+
+            flashStatus("Setup complete");
           } catch (e: any) {
             vscode.window.showErrorMessage(
               `Agent Tracing setup failed: ${e.message}`,
@@ -75,6 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
       );
     }),
 
+    // Start stack (docker compose up only, no full setup)
     vscode.commands.registerCommand("agentTracing.startStack", async () => {
       try {
         await vscode.window.withProgress(
@@ -85,8 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
           async () => {
             await langfuse.start();
-            stacksProvider.refresh();
-            updateNeedsSetup(langfuse);
+            provider.refresh();
           },
         );
         flashStatus("Langfuse started");
@@ -95,52 +83,71 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    // Stop stack
     vscode.commands.registerCommand("agentTracing.stopStack", async () => {
       try {
         await langfuse.stop();
-        stacksProvider.refresh();
-        updateNeedsSetup(langfuse);
+        provider.refresh();
         flashStatus("Langfuse stopped");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to stop Langfuse: ${e.message}`);
       }
     }),
 
+    // Open dashboard in Simple Browser
     vscode.commands.registerCommand("agentTracing.openDashboard", async () => {
       await langfuse.openDashboard();
     }),
 
-    vscode.commands.registerCommand("agentTracing.installHooks", async () => {
-      try {
-        await hookManager.installAll();
-        hooksProvider.refresh();
-        flashStatus("Hooks installed");
-      } catch (e: any) {
-        vscode.window.showErrorMessage(
-          `Failed to install hooks: ${e.message}`,
-        );
-      }
-    }),
-
-    vscode.commands.registerCommand("agentTracing.removeHooks", async () => {
-      try {
-        await hookManager.removeAll();
-        hooksProvider.refresh();
-        flashStatus("Hooks removed");
-      } catch (e: any) {
-        vscode.window.showErrorMessage(
-          `Failed to remove hooks: ${e.message}`,
-        );
-      }
-    }),
-
-    vscode.commands.registerCommand("agentTracing.refresh", () => {
-      stacksProvider.refresh();
-      hooksProvider.refresh();
-    }),
-
+    // Show login info (modal with Copy buttons)
     vscode.commands.registerCommand("agentTracing.showLoginInfo", async () => {
       await langfuse.showLoginInfo();
+    }),
+
+    // Refresh tree
+    vscode.commands.registerCommand("agentTracing.refresh", () => {
+      provider.refresh();
+    }),
+
+    // Enable hook (per-agent, called from inline icon with tree item arg)
+    vscode.commands.registerCommand("agentTracing.enableHook", async (item?: { target?: string; contextValue?: string }) => {
+      const target = resolveAgentTarget(item);
+      if (!target) {
+        // Fallback: prompt user
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: "GitHub Copilot Chat", value: "vscode" as AgentTarget },
+            { label: "Claude", value: "claude" as AgentTarget },
+          ],
+          { placeHolder: "Select agent to enable tracing for" },
+        );
+        if (!pick) return;
+        hookManager.enableAgent(pick.value);
+      } else {
+        hookManager.enableAgent(target);
+      }
+      provider.refresh();
+      flashStatus("Hook enabled");
+    }),
+
+    // Disable hook (per-agent)
+    vscode.commands.registerCommand("agentTracing.disableHook", async (item?: { target?: string; contextValue?: string }) => {
+      const target = resolveAgentTarget(item);
+      if (!target) {
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: "GitHub Copilot Chat", value: "vscode" as AgentTarget },
+            { label: "Claude", value: "claude" as AgentTarget },
+          ],
+          { placeHolder: "Select agent to disable tracing for" },
+        );
+        if (!pick) return;
+        hookManager.disableAgent(pick.value);
+      } else {
+        hookManager.disableAgent(target);
+      }
+      provider.refresh();
+      flashStatus("Hook disabled");
     }),
   );
 
@@ -149,44 +156,47 @@ export function activate(context: vscode.ExtensionContext) {
     .getConfiguration("agentTracing.langfuse")
     .get<boolean>("autoStart", false);
   if (autoStart) {
-    langfuse.start().then(() => stacksProvider.refresh()).catch(() => {});
+    langfuse.start().then(() => provider.refresh()).catch(() => {});
   } else {
-    // Silent health check: if hooks are installed but stack is down, nudge user once
-    checkAndNudge(langfuse, hookManager, stacksProvider);
+    checkAndNudge(langfuse, hookManager, provider);
   }
 
-  // Initial refresh + set welcome view context
-  stacksProvider.refresh();
-  hooksProvider.refresh();
-  updateNeedsSetup(langfuse);
+  // Initial refresh
+  provider.refresh();
 }
 
-/** Set context key so the welcome view shows when stack has never been set up. */
-async function updateNeedsSetup(langfuse: LangfuseManager): Promise<void> {
-  const running = await langfuse.isRunning();
-  vscode.commands.executeCommand(
-    "setContext",
-    "agentTracing.needsSetup",
-    !running,
-  );
+/** Extract agent target from tree item contextValue or direct property. */
+function resolveAgentTarget(item?: { target?: string; contextValue?: string }): AgentTarget | undefined {
+  if (!item) return undefined;
+
+  // Direct target property (if tree item exposes it)
+  if (item.target === "vscode" || item.target === "claude") {
+    return item.target;
+  }
+
+  // Parse from contextValue: agent-tracing-vscode / agent-not-tracing-claude etc.
+  const cv = item.contextValue ?? "";
+  if (cv.endsWith("-vscode")) return "vscode";
+  if (cv.endsWith("-claude")) return "claude";
+  return undefined;
 }
 
 /** Silently check if hooks are installed but Langfuse isn't running, prompt once. */
 async function checkAndNudge(
   langfuse: LangfuseManager,
   hookManager: HookManager,
-  stacksProvider: StacksTreeProvider,
+  provider: TracingSolutionsTreeProvider,
 ): Promise<void> {
   try {
     const statuses = await hookManager.getStatuses();
     const anyInstalled = statuses.some((s) => s.installed);
-    if (!anyInstalled) return; // no hooks → no reason to nudge
+    if (!anyInstalled) return;
 
     const running = await langfuse.isRunning();
-    if (running) return; // all good
+    if (running) return;
 
     const dockerOk = await langfuse.isDockerInstalled();
-    if (!dockerOk) return; // can't help without Docker, don't nag
+    if (!dockerOk) return;
 
     const action = await vscode.window.showInformationMessage(
       "Agent Tracing hooks are active but Langfuse is not running. Traces won't be recorded.",
@@ -202,12 +212,12 @@ async function checkAndNudge(
         },
         async () => {
           await langfuse.start();
-          stacksProvider.refresh();
+          provider.refresh();
         },
       );
     }
   } catch {
-    // Silently ignore — this is a best-effort nudge
+    // best-effort nudge
   }
 }
 
