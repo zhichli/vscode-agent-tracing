@@ -121,10 +121,20 @@ export class LangfuseManager {
     }
     this.writeComposeFile(); // ensure file exists
     this.log("Starting Langfuse v3 stack (web, worker, postgres, clickhouse, redis, minio)…");
-    await exec(
-      `docker compose -p agent-tracing -f "${this.composePath}" up -d --wait`,
-      { timeout: 180_000 },
-    );
+    try {
+      await exec(
+        `docker compose -p agent-tracing -f "${this.composePath}" up -d --wait`,
+        { timeout: 180_000 },
+      );
+    } catch (e: any) {
+      const msg = e.message ?? "";
+      if (msg.includes("address pools have been fully subnetted") || msg.includes("Pool overlaps")) {
+        throw new Error(
+          "Docker ran out of network address space. Run 'docker network prune' in a terminal to free unused networks, then try again.",
+        );
+      }
+      throw e;
+    }
     this.log("Langfuse stack started.");
   }
 
@@ -441,6 +451,13 @@ volumes:
   agent-tracing-clickhouse-data:
   agent-tracing-clickhouse-logs:
   agent-tracing-minio-data:
+
+networks:
+  default:
+    name: agent-tracing
+    ipam:
+      config:
+        - subnet: 172.177.0.0/16
 `;
   }
 
