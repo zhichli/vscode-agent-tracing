@@ -1,0 +1,217 @@
+{
+  "name": "vscode-agent-tracing",
+  "displayName": "Agent Tracing",
+  "description": "Local-first observability for AI coding agents. One-click setup for tracing VS Code Copilot and Claude Code sessions with pluggable backends like Langfuse.",
+  "version": "0.1.0",
+  "publisher": "zhichli",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhichli/vscode-agent-tracing"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "langfuse",
+    "observability",
+    "tracing",
+    "copilot",
+    "claude",
+    "agent",
+    "hooks",
+    "claude-code"
+  ],
+  "icon": "resources/icons/agent-tracing-128.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentTracing",
+          "title": "Agent Tracing",
+          "icon": "resources/icons/agent-tracing.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentTracing": [
+        {
+          "id": "agentTracing.hooks",
+          "name": "Hooks"
+        },
+        {
+          "id": "agentTracing.stacks",
+          "name": "Observability"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentTracing.stacks",
+        "contents": "Langfuse observability stack is not set up yet.\n[$(rocket) Run Full Setup](command:agentTracing.setup)\nRequires Docker to be installed and running.",
+        "when": "agentTracing.needsSetup"
+      }
+    ],
+    "commands": [
+      {
+        "command": "agentTracing.setup",
+        "title": "Agent Tracing: Full Setup",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "agentTracing.startStack",
+        "title": "Agent Tracing: Start Observability Stack",
+        "icon": "$(play)"
+      },
+      {
+        "command": "agentTracing.stopStack",
+        "title": "Agent Tracing: Stop Observability Stack",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "agentTracing.openDashboard",
+        "title": "Agent Tracing: Open Dashboard",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "agentTracing.installHooks",
+        "title": "Agent Tracing: Install Hooks",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentTracing.removeHooks",
+        "title": "Agent Tracing: Remove Hooks",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentTracing.refresh",
+        "title": "Agent Tracing: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentTracing.showLoginInfo",
+        "title": "Agent Tracing: Show Langfuse Login Info",
+        "icon": "$(key)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentTracing.setup",
+          "when": "view == agentTracing.stacks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentTracing.startStack",
+          "when": "view == agentTracing.stacks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agentTracing.stopStack",
+          "when": "view == agentTracing.stacks",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agentTracing.openDashboard",
+          "when": "view == agentTracing.stacks",
+          "group": "navigation@4"
+        },
+        {
+          "command": "agentTracing.showLoginInfo",
+          "when": "view == agentTracing.stacks",
+          "group": "overflow"
+        },
+        {
+          "command": "agentTracing.refresh",
+          "when": "view == agentTracing.stacks",
+          "group": "navigation@5"
+        },
+        {
+          "command": "agentTracing.installHooks",
+          "when": "view == agentTracing.hooks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentTracing.removeHooks",
+          "when": "view == agentTracing.hooks",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agentTracing.refresh",
+          "when": "view == agentTracing.hooks",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentTracing.startStack",
+          "when": "view == agentTracing.stacks && viewItem == stack-stopped",
+          "group": "inline"
+        },
+        {
+          "command": "agentTracing.stopStack",
+          "when": "view == agentTracing.stacks && viewItem == stack-running",
+          "group": "inline"
+        },
+        {
+          "command": "agentTracing.openDashboard",
+          "when": "view == agentTracing.stacks && viewItem == stack-running",
+          "group": "inline"
+        },
+        {
+          "command": "agentTracing.setup",
+          "when": "view == agentTracing.stacks && viewItem == stack-not-installed",
+          "group": "inline"
+        },
+        {
+          "command": "agentTracing.removeHooks",
+          "when": "view == agentTracing.hooks && viewItem =~ /hook-installed/",
+          "group": "inline"
+        },
+        {
+          "command": "agentTracing.installHooks",
+          "when": "view == agentTracing.hooks && viewItem =~ /hook-not-installed/",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agent Tracing",
+      "properties": {
+        "agentTracing.langfuse.port": {
+          "type": "number",
+          "default": 3000,
+          "description": "Port for the Langfuse dashboard (localhost)"
+        },
+        "agentTracing.langfuse.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start Langfuse when VS Code opens"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}

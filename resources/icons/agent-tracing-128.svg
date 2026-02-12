@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded square background - flat dark -->
+  <rect x="4" y="4" width="120" height="120" rx="28" ry="28" fill="#1E1E1E"/>
+
+  <!-- Subtle border -->
+  <rect x="4" y="4" width="120" height="120" rx="28" ry="28" fill="none" stroke="#333" stroke-width="2"/>
+
+  <!-- Bold pulse trace (matches sidebar shape) -->
+  <path
+    d="M20 64 h20 l15,-48 20,96 15,-48 h20"
+    stroke="#4EC9B0"
+    stroke-width="9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+</svg>
