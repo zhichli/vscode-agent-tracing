@@ -89,6 +89,16 @@
         "command": "agentTracing.disableHook",
         "title": "Agent Tracing: Disable Hook",
         "icon": "$(close)"
+      },
+      {
+        "command": "agentTracing.connectExternal",
+        "title": "Agent Tracing: Connect to Existing Langfuse",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "agentTracing.disconnect",
+        "title": "Agent Tracing: Disconnect External Langfuse",
+        "icon": "$(debug-disconnect)"
       }
     ],
     "menus": {
@@ -106,9 +116,19 @@
           "group": "inline@1"
         },
         {
+          "command": "agentTracing.connectExternal",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-not-configured",
+          "group": "inline@2"
+        },
+        {
           "command": "agentTracing.setup",
           "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
           "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.connectExternal",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
+          "group": "inline@2"
         },
         {
           "command": "agentTracing.showLoginInfo",
@@ -126,9 +146,24 @@
           "group": "inline@3"
         },
         {
+          "command": "agentTracing.disconnect",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.openDashboard",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
+          "group": "inline@2"
+        },
+        {
           "command": "agentTracing.startStack",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
           "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.connectExternal",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
+          "group": "inline@2"
         },
         {
           "command": "agentTracing.disableHook",

@@ -34,6 +34,19 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     // Full Setup: hooks → pip → docker → start → health → open dashboard
     vscode.commands.registerCommand("agentTracing.setup", async () => {
+      // If Langfuse is already running, offer to connect instead
+      if (await langfuse.isRunning()) {
+        const action = await vscode.window.showInformationMessage(
+          `Langfuse is already running at ${langfuse.dashboardUrl}. Would you like to connect to this existing instance instead?`,
+          "Connect to Existing",
+          "Cancel",
+        );
+        if (action === "Connect to Existing") {
+          await vscode.commands.executeCommand("agentTracing.connectExternal");
+        }
+        return;
+      }
+
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -148,6 +161,81 @@ export function activate(context: vscode.ExtensionContext) {
       }
       provider.refresh();
       flashStatus("Hook disabled");
+    }),
+
+    // Connect to existing Langfuse instance (external mode)
+    vscode.commands.registerCommand("agentTracing.connectExternal", async () => {
+      // 1. Ask for host URL
+      const host = await vscode.window.showInputBox({
+        title: "Langfuse Host URL",
+        prompt: "Enter the URL of your running Langfuse instance",
+        value: `http://localhost:${langfuse.port}`,
+        placeHolder: "http://localhost:3000",
+        validateInput: (v) => {
+          try {
+            new URL(v);
+            return undefined;
+          } catch {
+            return "Please enter a valid URL";
+          }
+        },
+      });
+      if (!host) return;
+
+      // 2. Check if reachable
+      const reachable = await (async () => {
+        try {
+          const res = await fetch(`${host}/api/public/health`);
+          return res.ok;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (!reachable) {
+        const proceed = await vscode.window.showWarningMessage(
+          `Could not reach Langfuse at ${host}. Connect anyway?`,
+          "Connect Anyway",
+          "Cancel",
+        );
+        if (proceed !== "Connect Anyway") return;
+      }
+
+      // 3. Ask for API keys
+      const publicKey = await vscode.window.showInputBox({
+        title: "Langfuse Public Key",
+        prompt: "Enter the project public key (starts with pk-lf-...)",
+        placeHolder: "pk-lf-...",
+        validateInput: (v) => v.trim() ? undefined : "Public key is required",
+      });
+      if (!publicKey) return;
+
+      const secretKey = await vscode.window.showInputBox({
+        title: "Langfuse Secret Key",
+        prompt: "Enter the project secret key (starts with sk-lf-...)",
+        placeHolder: "sk-lf-...",
+        password: true,
+        validateInput: (v) => v.trim() ? undefined : "Secret key is required",
+      });
+      if (!secretKey) return;
+
+      // 4. Store and connect
+      await langfuse.connectExternal(publicKey.trim(), secretKey.trim(), host.trim());
+
+      // 5. Install hooks pointing to the external instance
+      await hookManager.installAll();
+      provider.refresh();
+      flashStatus("Connected to external Langfuse");
+
+      // 6. Open dashboard
+      await langfuse.openDashboard();
+    }),
+
+    // Disconnect from external Langfuse
+    vscode.commands.registerCommand("agentTracing.disconnect", async () => {
+      await langfuse.disconnect();
+      provider.refresh();
+      flashStatus("Disconnected from Langfuse");
     }),
   );
 

@@ -6,7 +6,12 @@ import { HookManager, HookStatus } from "../hooks/hookManager";
 // Types
 // ---------------------------------------------------------------------------
 
-type LangfuseState = "not-configured" | "running" | "stopped" | "docker-not-found";
+type LangfuseState =
+  | "not-configured"
+  | "running"           // managed, running
+  | "running-external"  // external instance detected
+  | "stopped"
+  | "docker-not-found";
 
 type TreeNode = LangfuseNode | AgentNode;
 
@@ -51,21 +56,25 @@ export class TracingSolutionsTreeProvider
   }
 
   private async resolveStates(): Promise<void> {
-    const dockerOk = await this.langfuse.isDockerInstalled();
-    if (!dockerOk) {
-      this.langfuseState = "docker-not-found";
-      this.hookStatuses = await this.hookManager.getStatuses();
-      return;
-    }
-
-    const running = await this.langfuse.isRunning();
     this.hookStatuses = await this.hookManager.getStatuses();
     const anyHookInstalled = this.hookStatuses.some((s) => s.installed);
 
+    const running = await this.langfuse.isRunning();
+
     if (running) {
-      this.langfuseState = "running";
-    } else if (anyHookInstalled) {
-      // Stack was set up before (hooks exist) but is currently stopped
+      // Determine if this is our managed stack or an external instance
+      this.langfuseState = this.langfuse.isExternal ? "running-external" : "running";
+      return;
+    }
+
+    // Not running — check Docker availability
+    const dockerOk = await this.langfuse.isDockerInstalled();
+    if (!dockerOk) {
+      this.langfuseState = "docker-not-found";
+      return;
+    }
+
+    if (anyHookInstalled || this.langfuse.isManaged) {
       this.langfuseState = "stopped";
     } else {
       this.langfuseState = "not-configured";
@@ -79,7 +88,7 @@ export class TracingSolutionsTreeProvider
 
 class LangfuseNode extends vscode.TreeItem {
   constructor(state: LangfuseState, dashboardUrl: string) {
-    // Expand by default except for not-configured and docker-not-found
+    // Expand by default when running or stopped (has agent children)
     const collapsible =
       state === "not-configured" || state === "docker-not-found"
         ? vscode.TreeItemCollapsibleState.None
@@ -95,6 +104,19 @@ class LangfuseNode extends vscode.TreeItem {
           new vscode.ThemeColor("testing.iconPassed"),
         );
         this.contextValue = "langfuse-running";
+        this.command = {
+          command: "agentTracing.openDashboard",
+          title: "Open Dashboard",
+        };
+        break;
+
+      case "running-external":
+        this.description = `External — ${dashboardUrl}`;
+        this.iconPath = new vscode.ThemeIcon(
+          "pass-filled",
+          new vscode.ThemeColor("testing.iconPassed"),
+        );
+        this.contextValue = "langfuse-running-external";
         this.command = {
           command: "agentTracing.openDashboard",
           title: "Open Dashboard",

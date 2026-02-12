@@ -11,6 +11,9 @@ export const LANGFUSE_DEFAULT_USER = {
   name: "Agent Tracing",
 } as const;
 
+/** Whether the extension manages Docker or connects to an external instance. */
+export type LangfuseMode = "managed" | "external";
+
 /** Manages the Langfuse Docker stack lifecycle. */
 export class LangfuseManager {
   private composePath: string;
@@ -23,6 +26,45 @@ export class LangfuseManager {
       context.globalStorageUri.fsPath,
       "docker-compose.langfuse.yml",
     );
+  }
+
+  // ---- mode ----
+
+  get mode(): LangfuseMode {
+    return this.context.globalState.get<LangfuseMode>("langfuse.mode") ?? "managed";
+  }
+
+  get isManaged(): boolean {
+    return this.mode === "managed";
+  }
+
+  get isExternal(): boolean {
+    return this.mode === "external";
+  }
+
+  /** Switch to external mode and store user-provided keys + host. */
+  async connectExternal(publicKey: string, secretKey: string, host: string): Promise<void> {
+    await this.context.globalState.update("langfuse.mode", "external");
+    await this.context.globalState.update("langfuse.publicKey", publicKey);
+    await this.context.globalState.update("langfuse.secretKey", secretKey);
+    await this.context.globalState.update("langfuse.externalHost", host);
+    this.log(`Connected to external Langfuse at ${host}`);
+  }
+
+  /** Switch back to managed mode (clears external host). */
+  async switchToManaged(): Promise<void> {
+    await this.context.globalState.update("langfuse.mode", "managed");
+    await this.context.globalState.update("langfuse.externalHost", undefined);
+    // Keys stay — they'll be regenerated on next managed setup if needed
+    this.log("Switched to managed mode.");
+  }
+
+  /** Disconnect from external instance (clear mode + keys). */
+  async disconnect(): Promise<void> {
+    await this.context.globalState.update("langfuse.mode", undefined);
+    await this.context.globalState.update("langfuse.externalHost", undefined);
+    // Don't clear keys — they may still be valid if user reconnects
+    this.log("Disconnected from external Langfuse.");
   }
 
   // ---- public getters ----
@@ -48,6 +90,9 @@ export class LangfuseManager {
   }
 
   get dashboardUrl(): string {
+    if (this.isExternal) {
+      return this.context.globalState.get<string>("langfuse.externalHost") ?? `http://localhost:${this.port}`;
+    }
     return `http://localhost:${this.port}`;
   }
 
@@ -55,6 +100,14 @@ export class LangfuseManager {
 
   /** Full first-time setup: docker check → compose write → start → wait. */
   async setup(): Promise<void> {
+    // If Langfuse is already running (external), offer to connect instead
+    if (await this.isRunning()) {
+      throw new Error(
+        "Langfuse is already running on " + this.dashboardUrl +
+        ". Use 'Connect to Existing' to connect to it, or change the port in settings.",
+      );
+    }
+    await this.switchToManaged();
     await this.requireDocker();
     await this.ensurePythonLangfuse();
     this.writeComposeFile();
@@ -63,6 +116,9 @@ export class LangfuseManager {
   }
 
   async start(): Promise<void> {
+    if (this.isExternal) {
+      throw new Error("Cannot start an external Langfuse instance from this extension.");
+    }
     this.writeComposeFile(); // ensure file exists
     this.log("Starting Langfuse v3 stack (web, worker, postgres, clickhouse, redis, minio)…");
     await exec(
@@ -73,6 +129,14 @@ export class LangfuseManager {
   }
 
   async stop(): Promise<void> {
+    if (this.isExternal) {
+      throw new Error("Cannot stop an external Langfuse instance from this extension.");
+    }
+    if (!fs.existsSync(this.composePath)) {
+      throw new Error(
+        "No managed Langfuse stack found. The running instance may be external — use 'Connect to Existing' instead.",
+      );
+    }
     this.log("Stopping Langfuse stack…");
     await exec(
       `docker compose -p agent-tracing -f "${this.composePath}" down`,
@@ -110,8 +174,15 @@ export class LangfuseManager {
     );
   }
 
-  /** Show a modal dialog with the auto-seeded login credentials. */
+  /** Show a modal dialog with login credentials (managed mode only). */
   async showLoginInfo(): Promise<void> {
+    if (this.isExternal) {
+      await vscode.window.showInformationMessage(
+        "This is an external Langfuse instance — login credentials are managed by you.",
+        { modal: true },
+      );
+      return;
+    }
     const action = await vscode.window.showInformationMessage(
       `Langfuse Login\n\nEmail: ${LANGFUSE_DEFAULT_USER.email}\nPassword: ${LANGFUSE_DEFAULT_USER.password}`,
       { modal: true },
@@ -122,6 +193,24 @@ export class LangfuseManager {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
     } else if (action === "Copy Password") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.password);
+    }
+  }
+
+  /** Validate that stored keys work against the running instance. */
+  async validateKeys(): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.dashboardUrl}/api/public/ingestion`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Basic " + Buffer.from(`${this.publicKey}:${this.secretKey}`).toString("base64"),
+        },
+        body: JSON.stringify({ batch: [] }),
+      });
+      // 207 = multi-status (expected for empty batch), 200 = ok
+      return res.status === 207 || res.ok;
+    } catch {
+      return false;
     }
   }
 
