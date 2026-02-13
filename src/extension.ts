@@ -4,6 +4,13 @@ import { HookManager, AgentTarget } from "./hooks/hookManager";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
+  // Ensure the VS Code Integrated Browser is used instead of Simple Browser
+  // so Langfuse loads correctly (avoids X-Frame-Options iframe blocking).
+  const browserCfg = vscode.workspace.getConfiguration("simpleBrowser");
+  if (!browserCfg.get<boolean>("useIntegratedBrowser")) {
+    browserCfg.update("useIntegratedBrowser", true, vscode.ConfigurationTarget.Global);
+  }
+
   const output = vscode.window.createOutputChannel("Agent Tracing");
   const langfuse = new LangfuseManager(context, output);
   const hookManager = new HookManager(context, langfuse, output);
@@ -116,14 +123,24 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    // Open dashboard in Simple Browser
+    // Open dashboard in VS Code integrated browser
     vscode.commands.registerCommand("agentTracing.openDashboard", async () => {
       await langfuse.openDashboard();
+    }),
+
+    // Open dashboard in external system browser
+    vscode.commands.registerCommand("agentTracing.openDashboardExternal", async () => {
+      await langfuse.openDashboardExternal();
     }),
 
     // Show login info (modal with Copy buttons)
     vscode.commands.registerCommand("agentTracing.showLoginInfo", async () => {
       await langfuse.showLoginInfo();
+    }),
+
+    // Show stack version info
+    vscode.commands.registerCommand("agentTracing.showStackVersion", async () => {
+      await langfuse.showStackVersion();
     }),
 
     // Refresh tree

@@ -67,7 +67,12 @@
       },
       {
         "command": "agentTracing.openDashboard",
-        "title": "Agent Tracing: Open Dashboard",
+        "title": "Agent Tracing: Open Dashboard (Integrated Browser)",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "agentTracing.openDashboardExternal",
+        "title": "Agent Tracing: Open Dashboard (External Browser)",
         "icon": "$(link-external)"
       },
       {
@@ -99,6 +104,11 @@
         "command": "agentTracing.disconnect",
         "title": "Agent Tracing: Disconnect External Langfuse",
         "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "agentTracing.showStackVersion",
+        "title": "Agent Tracing: Show Stack Version",
+        "icon": "$(info)"
       }
     ],
     "menus": {
@@ -146,6 +156,16 @@
           "group": "inline@3"
         },
         {
+          "command": "agentTracing.openDashboardExternal",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
+          "group": "inline@4"
+        },
+        {
+          "command": "agentTracing.showStackVersion",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
+          "group": "langfuse@1"
+        },
+        {
           "command": "agentTracing.disconnect",
           "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
           "group": "inline@1"
@@ -156,6 +176,11 @@
           "group": "inline@2"
         },
         {
+          "command": "agentTracing.openDashboardExternal",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
+          "group": "inline@3"
+        },
+        {
           "command": "agentTracing.startStack",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
           "group": "inline@1"
@@ -164,6 +189,11 @@
           "command": "agentTracing.connectExternal",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
           "group": "inline@2"
+        },
+        {
+          "command": "agentTracing.showStackVersion",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
+          "group": "langfuse@1"
         },
         {
           "command": "agentTracing.disableHook",
