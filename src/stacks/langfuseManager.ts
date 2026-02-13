@@ -14,6 +14,9 @@ export const LANGFUSE_DEFAULT_USER = {
 /** Whether the extension manages Docker or connects to an external instance. */
 export type LangfuseMode = "managed" | "external";
 
+/** Callback for reporting progress steps to UI (e.g. notification toast). */
+export type StepReporter = (message: string) => void;
+
 /** Manages the Langfuse Docker stack lifecycle. */
 export class LangfuseManager {
   private composePath: string;
@@ -99,28 +102,45 @@ export class LangfuseManager {
   // ---- lifecycle ----
 
   /** Full first-time setup: docker check → compose write → start → wait. */
-  async setup(): Promise<void> {
-    // If Langfuse is already running (external), offer to connect instead
+  async setup(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.log(msg); report?.(msg); };
+
+    step("Checking for existing Langfuse instance…");
     if (await this.isRunning()) {
       throw new Error(
         "Langfuse is already running on " + this.dashboardUrl +
         ". Use 'Connect to Existing' to connect to it, or change the port in settings.",
       );
     }
+
+    step("Switching to managed mode…");
     await this.switchToManaged();
+
+    step("Verifying Docker is installed and running…");
     await this.requireDocker();
+
+    step("Ensuring Python langfuse package is installed…");
     await this.ensurePythonLangfuse();
+
+    step("Writing docker-compose file…");
     this.writeComposeFile();
-    await this.start();
-    await this.waitForReady();
+
+    await this.start(report);
+    await this.waitForReady(90_000, report);
+
+    step("Setup complete — Langfuse is ready.");
   }
 
-  async start(): Promise<void> {
+  async start(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.log(msg); report?.(msg); };
+
     if (this.isExternal) {
       throw new Error("Cannot start an external Langfuse instance from this extension.");
     }
+    step("Ensuring compose file is up to date…");
     this.writeComposeFile(); // ensure file exists
-    this.log("Starting Langfuse v3 stack (web, worker, postgres, clickhouse, redis, minio)…");
+
+    step("Starting Langfuse v3 stack (web, worker, postgres, clickhouse, redis, minio)…");
     try {
       await exec(
         `docker compose -p agent-tracing -f "${this.composePath}" up -d --wait`,
@@ -128,6 +148,7 @@ export class LangfuseManager {
       );
     } catch (e: any) {
       const msg = e.message ?? "";
+      this.log(`Docker compose failed: ${msg}`);
       if (msg.includes("address pools have been fully subnetted") || msg.includes("Pool overlaps")) {
         throw new Error(
           "Docker ran out of network address space. Run 'docker network prune' in a terminal to free unused networks, then try again.",
@@ -135,10 +156,12 @@ export class LangfuseManager {
       }
       throw e;
     }
-    this.log("Langfuse stack started.");
+    step("Langfuse stack containers started.");
   }
 
-  async stop(): Promise<void> {
+  async stop(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.log(msg); report?.(msg); };
+
     if (this.isExternal) {
       throw new Error("Cannot stop an external Langfuse instance from this extension.");
     }
@@ -147,12 +170,12 @@ export class LangfuseManager {
         "No managed Langfuse stack found. The running instance may be external — use 'Connect to Existing' instead.",
       );
     }
-    this.log("Stopping Langfuse stack…");
+    step("Stopping Langfuse stack…");
     await exec(
       `docker compose -p agent-tracing -f "${this.composePath}" down`,
       { timeout: 60_000 },
     );
-    this.log("Langfuse stack stopped.");
+    step("Langfuse stack stopped.");
   }
 
   async isRunning(): Promise<boolean> {
@@ -228,23 +251,25 @@ export class LangfuseManager {
 
   private async requireDocker(): Promise<void> {
     if (!(await this.isDockerInstalled())) {
+      this.log("Docker check FAILED — docker info returned an error.");
       throw new Error(
         "Docker is not installed or not running. Please install Docker and try again.",
       );
     }
+    this.log("Docker check passed.");
   }
 
   private async ensurePythonLangfuse(): Promise<void> {
     try {
       await exec("python3 -c \"import langfuse\"", { timeout: 10_000 });
-      this.log("Python langfuse package already installed.");
+      this.log("Python langfuse package already installed — skipping install.");
     } catch {
-      this.log("Installing langfuse Python package…");
+      this.log("Python langfuse package not found — installing via pip3…");
       try {
         await exec("pip3 install --user langfuse", { timeout: 120_000 });
-        this.log("langfuse Python package installed.");
+        this.log("Python langfuse package installed successfully.");
       } catch (e: any) {
-        this.log(`Warning: Could not install langfuse Python package: ${e.message}`);
+        this.log(`WARNING: Could not install langfuse Python package: ${e.message}`);
         vscode.window.showWarningMessage(
           "Could not auto-install the `langfuse` Python package. Please run: pip3 install langfuse",
         );
@@ -252,13 +277,18 @@ export class LangfuseManager {
     }
   }
 
-  private async waitForReady(timeoutMs = 90_000): Promise<void> {
+  private async waitForReady(timeoutMs = 90_000, report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.log(msg); report?.(msg); };
+    step("Waiting for Langfuse to become healthy…");
     const start = Date.now();
+    let attempts = 0;
     while (Date.now() - start < timeoutMs) {
+      attempts++;
       if (await this.isRunning()) {
-        this.log("Langfuse is ready.");
+        step("Langfuse health check passed — server is ready.");
         return;
       }
+      this.log(`Health check attempt ${attempts} failed, retrying in 2s…`);
       await sleep(2000);
     }
     throw new Error(

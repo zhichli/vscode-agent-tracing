@@ -54,16 +54,16 @@ export function activate(context: vscode.ExtensionContext) {
           cancellable: false,
         },
         async (progress) => {
+          const report = (message: string) => progress.report({ message });
           try {
-            progress.report({ message: "Starting Langfuse stack…" });
-            await langfuse.setup();
+            await langfuse.setup(report);
 
-            progress.report({ message: "Installing hooks…" });
+            report("Installing hooks…");
             await hookManager.installAll();
 
             provider.refresh();
 
-            progress.report({ message: "Opening dashboard…" });
+            report("Opening dashboard…");
             await langfuse.openDashboard();
 
             flashStatus("Setup complete");
@@ -85,8 +85,8 @@ export function activate(context: vscode.ExtensionContext) {
             title: "Agent Tracing: Starting Langfuse…",
             cancellable: false,
           },
-          async () => {
-            await langfuse.start();
+          async (progress) => {
+            await langfuse.start((msg) => progress.report({ message: msg }));
             provider.refresh();
           },
         );
@@ -99,8 +99,17 @@ export function activate(context: vscode.ExtensionContext) {
     // Stop stack
     vscode.commands.registerCommand("agentTracing.stopStack", async () => {
       try {
-        await langfuse.stop();
-        provider.refresh();
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Agent Tracing",
+            cancellable: false,
+          },
+          async (progress) => {
+            await langfuse.stop((msg) => progress.report({ message: msg }));
+            provider.refresh();
+          },
+        );
         flashStatus("Langfuse stopped");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to stop Langfuse: ${e.message}`);
@@ -298,8 +307,8 @@ async function checkAndNudge(
           title: "Agent Tracing: Starting Langfuse…",
           cancellable: false,
         },
-        async () => {
-          await langfuse.start();
+        async (progress) => {
+          await langfuse.start((msg) => progress.report({ message: msg }));
           provider.refresh();
         },
       );
