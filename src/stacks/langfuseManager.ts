@@ -42,7 +42,7 @@ export class LangfuseManager {
   }
 
   get isManaged(): boolean {
-    return this.mode === "managed";
+    return this.mode === "managed" && fs.existsSync(this.composePath);
   }
 
   get isExternal(): boolean {
@@ -249,7 +249,7 @@ export class LangfuseManager {
       fs.unlinkSync(this.composePath);
     }
 
-    await this.switchToManaged();
+    await this.context.globalState.update("langfuse.mode", undefined);
     step("Stack purged — all data removed.");
   }
 
