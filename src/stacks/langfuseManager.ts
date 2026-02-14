@@ -272,14 +272,14 @@ export class LangfuseManager {
   }
 
   async openDashboard(): Promise<void> {
-    // VS Code Integrated Browser (experimental) — runs in an editor tab.
-    // Uses the `simpleBrowser.api.open` command which the Integrated Browser
-    // replaces when `simpleBrowser.useIntegratedBrowser` is enabled.
+    // simpleBrowser.api.open reuses an existing Simple Browser tab when
+    // the same base URL is already open — no duplicate tabs.
+    // We always navigate to the root URL to avoid stacking sub-paths.
     await vscode.commands.executeCommand(
       "simpleBrowser.api.open",
       vscode.Uri.parse(this.dashboardUrl),
       {
-        viewColumn: vscode.ViewColumn.One,
+        viewColumn: vscode.ViewColumn.Active,
         preserveFocus: false,
       },
     );
