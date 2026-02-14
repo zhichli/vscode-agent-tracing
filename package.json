@@ -96,13 +96,13 @@
         "command": "agentTracing.enableHook",
         "title": "Agent Tracing: Enable Hooks",
         "shortTitle": "Enable Hooks",
-        "icon": "$(broadcast)"
+        "icon": "$(plug)"
       },
       {
         "command": "agentTracing.disableHook",
         "title": "Agent Tracing: Disable Hooks",
         "shortTitle": "Disable Hooks",
-        "icon": "$(circle-slash)"
+        "icon": "$(debug-disconnect)"
       },
       {
         "command": "agentTracing.connectExternal",
