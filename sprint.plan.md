@@ -80,6 +80,8 @@ vscode.commands.registerCommand("agentTracing.disconnect", async () => {
 - [ ] Disconnect cleans up hooks
 
 ### 2.2 Verify `.vsix` package contents
+**Status:** DONE  
+Package verified:
 ```bash
 npm run package
 # Inspect:
@@ -91,6 +93,7 @@ npx vsce ls
 ```
 
 ### 2.3 Review `package.json` for marketplace
+**Status:** DONE — all fields verified  
 - [ ] `publisher` field is set (`zhichli`)
 - [ ] `repository` URL is correct
 - [ ] `icon` exists and is 128x128 PNG
@@ -112,8 +115,10 @@ Place in `resources/screenshots/` and reference in README.md.
 ---
 
 ## Phase 3: GitHub Release Workflow
+**Status:** DONE
 
 ### 3.1 Create `.github/workflows/release.yml`
+**Status:** DONE  
 
 ```yaml
 name: Release & Publish
@@ -159,6 +164,7 @@ jobs:
 ```
 
 ### 3.2 Create `.github/workflows/ci.yml`
+**Status:** DONE  
 
 ```yaml
 name: CI
