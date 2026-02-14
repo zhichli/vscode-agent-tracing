@@ -301,8 +301,8 @@ export class LangfuseManager {
     const action = await vscode.window.showInformationMessage(
       `Langfuse Login\n\nEmail: ${LANGFUSE_DEFAULT_USER.email}\nPassword: ${LANGFUSE_DEFAULT_USER.password}`,
       { modal: true },
-      "Copy Email",
       "Copy Password",
+      "Copy Email",
     );
     if (action === "Copy Email") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
