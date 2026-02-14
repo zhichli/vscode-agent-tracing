@@ -202,7 +202,37 @@ export class LangfuseManager {
       throw new Error("Cannot recreate an external Langfuse instance.");
     }
 
-    // Tear down with volumes
+    // Tear down WITHOUT volumes — keeps trace data in Postgres/ClickHouse
+    if (fs.existsSync(this.composePath)) {
+      step("docker compose down (keeping data volumes)…");
+      await execStreaming(
+        `docker compose -p agent-tracing -f "${this.composePath}" down`,
+        {
+          timeout: 60_000,
+          onLine: (line) => {
+            this.output.info(`  ${line}`);
+            report?.(line);
+          },
+        },
+      );
+    }
+
+    // Rebuild from fresh compose file
+    step("Recreating containers…");
+    this.writeComposeFile();
+    await this.start(report);
+    await this.waitForReady(90_000, report);
+    step("Stack recreated — trace data preserved.");
+  }
+
+  /** Destroy stack + volumes completely. Wipes all data. */
+  async purge(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
+
+    if (this.isExternal) {
+      throw new Error("Cannot purge an external Langfuse instance.");
+    }
+
     if (fs.existsSync(this.composePath)) {
       step("docker compose down -v (removing containers + volumes)…");
       await execStreaming(
@@ -215,14 +245,12 @@ export class LangfuseManager {
           },
         },
       );
+      // Remove compose file
+      fs.unlinkSync(this.composePath);
     }
 
-    // Full setup from scratch
-    step("Recreating stack from scratch…");
-    this.writeComposeFile();
-    await this.start(report);
-    await this.waitForReady(90_000, report);
-    step("Stack recreated — all data reset.");
+    await this.switchToManaged();
+    step("Stack purged — all data removed.");
   }
 
   async isRunning(): Promise<boolean> {
@@ -463,10 +491,10 @@ services:
       <<: *langfuse-worker-env
       NEXTAUTH_SECRET: "${secret}"
       # Auto-seed org, project, and user so hooks work with zero manual setup
-      LANGFUSE_INIT_ORG_ID: agent-tracing-local
-      LANGFUSE_INIT_ORG_NAME: Local
+      LANGFUSE_INIT_ORG_ID: agent-tracing-vscode
+      LANGFUSE_INIT_ORG_NAME: VS Code
       LANGFUSE_INIT_PROJECT_ID: agent-tracing-default
-      LANGFUSE_INIT_PROJECT_NAME: Agent Traces
+      LANGFUSE_INIT_PROJECT_NAME: Agent Tracing
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${pk}"
       LANGFUSE_INIT_PROJECT_SECRET_KEY: "${sk}"
       LANGFUSE_INIT_USER_EMAIL: local@agent-tracing.dev

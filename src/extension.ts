@@ -125,15 +125,8 @@ title: "Agent Tracing",
       }
     }),
 
-    // Recreate stack (destroy + rebuild from scratch — wipes all data)
+    // Recreate stack (rebuild containers, keep trace data in volumes)
     vscode.commands.registerCommand("agentTracing.recreateStack", async () => {
-      const confirm = await vscode.window.showWarningMessage(
-        "This will destroy the Langfuse stack and all trace data, then recreate it from scratch. This cannot be undone.",
-        { modal: true },
-        "Recreate",
-      );
-      if (confirm !== "Recreate") return;
-
       try {
         await vscode.window.withProgress(
           {
@@ -147,10 +140,38 @@ title: "Agent Tracing",
             provider.refresh();
           },
         );
-        flashStatus("Stack recreated — fresh start");
+        flashStatus("Stack recreated — trace data preserved");
         await langfuse.openDashboard();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to recreate stack: ${e.message}`);
+      }
+    }),
+
+    // Purge stack (destroy containers + volumes — wipes all data)
+    vscode.commands.registerCommand("agentTracing.purgeStack", async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        "This will permanently delete all Langfuse containers, volumes, and trace data. This cannot be undone.",
+        { modal: true },
+        "Delete Everything",
+      );
+      if (confirm !== "Delete Everything") return;
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Agent Tracing",
+            cancellable: false,
+          },
+          async (progress) => {
+            await langfuse.purge((msg) => progress.report({ message: msg }));
+            hookManager.disableHooks();
+            provider.refresh();
+          },
+        );
+        flashStatus("Stack deleted");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to purge stack: ${e.message}`);
       }
     }),
 
