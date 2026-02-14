@@ -127,6 +127,13 @@ title: "Agent Tracing",
 
     // Recreate stack (rebuild containers, keep trace data in volumes)
     vscode.commands.registerCommand("agentTracing.recreateStack", async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        "This will stop and rebuild all Langfuse containers. Your trace data will be preserved.",
+        { modal: true, detail: "Containers will be destroyed and recreated from the latest compose config. Database volumes (Postgres, ClickHouse) are kept — all existing traces, sessions, and projects remain intact." },
+        "Recreate",
+      );
+      if (confirm !== "Recreate") return;
+
       try {
         await vscode.window.withProgress(
           {
@@ -151,7 +158,7 @@ title: "Agent Tracing",
     vscode.commands.registerCommand("agentTracing.purgeStack", async () => {
       const confirm = await vscode.window.showWarningMessage(
         "This will permanently delete all Langfuse containers, volumes, and trace data. This cannot be undone.",
-        { modal: true },
+        { modal: true, detail: "All Docker containers, database volumes (Postgres, ClickHouse), and stored traces will be removed. You will need to run Full Setup again to start tracing." },
         "Delete Everything",
       );
       if (confirm !== "Delete Everything") return;
