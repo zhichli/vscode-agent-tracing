@@ -6,27 +6,29 @@
 
 ## Phase 1: P0 Bug Fixes (must-fix before publish)
 
-### 1.1 Add `session_id` + `tags` to Langfuse traces
+### 1.1 Add `session_id` + Langfuse environments to traces
 **Files:** `resources/hooks/langfuse_hook.py`  
 **Scope:** ~20 lines  
-**What:** Pass `session_id` and agent-specific `tags` to `start_as_current_span()` so Langfuse groups turns into sessions and allows filtering by agent.
+**Status:** DONE  
+**What:** Set `environment` on Langfuse client (per-agent: `github-copilot-chat` / `claude-code`) and pass `session_id` to `start_as_current_span()`. Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views.
 
 ```python
-# Both create_vscode_trace and create_claude_trace need:
+langfuse = Langfuse(
+    public_key=..., secret_key=..., host=...,
+    environment=AGENT_ENVIRONMENTS.get(agent, "default"),  # ← per-agent env
+)
+
 with langfuse.start_as_current_span(
     name=f"Turn {turn_num}",
-    session_id=session_id,                    # ← ADD: groups turns into sessions
-    tags=["github-copilot-chat"],             # ← ADD: filterable by agent
-    input={"role": "user", "content": user_text},
-    metadata=metadata,
-) as trace_span:
+    session_id=session_id,    # ← groups turns into sessions
+    ...
+)
 ```
-
-**Verify:** After tracing both agents, open Langfuse → Sessions view → sessions group properly. Traces view → filter by tag `github-copilot-chat` or `claude-code` works.
 
 ### 1.2 Fix `disconnect` to also disable hooks
 **Files:** `src/extension.ts`  
 **Scope:** ~3 lines  
+**Status:** DONE  
 **What:** When disconnecting from external Langfuse, also disable hooks (otherwise they fire and fail).
 
 ```typescript
@@ -41,6 +43,7 @@ vscode.commands.registerCommand("agentTracing.disconnect", async () => {
 ### 1.3 Wrap enable/disable in try-catch
 **Files:** `src/extension.ts`  
 **Scope:** ~10 lines  
+**Status:** DONE  
 **What:** `enableHooks()` and `disableHooks()` do file I/O — catch and surface errors.
 
 ### 1.4 Make minio port configurable (or random)
@@ -51,7 +54,8 @@ vscode.commands.registerCommand("agentTracing.disconnect", async () => {
 ### 1.5 Add hooks-on/off to node description
 **Files:** `src/views/tracingSolutionsTreeProvider.ts`  
 **Scope:** ~5 lines  
-**What:** Running state description: `"Running — localhost:3000 — Tracing"` vs `"Running — localhost:3000"` when hooks off.
+**Status:** DONE  
+**What:** Running state description: `"Tracing — localhost:3000"` vs `"Running — localhost:3000"` when hooks off.
 
 ### 1.6 Debounce nudge notification
 **Files:** `src/extension.ts`  
@@ -232,25 +236,30 @@ npx vsce publish
 
 ---
 
-## Phase 5: Trace Isolation Roadmap (v0.2)
+## Phase 5: Trace Isolation (DONE — v0.1 uses Langfuse Environments)
 
-### Current (v0.1): Tags-Based Filtering
-- Single Langfuse project, `tags` on each trace for agent identification
-- Users filter by tag in dashboard
-- Adequate for most use cases
+### Implemented: Langfuse Environments
 
-### Future (v0.2): Separate Langfuse Projects per Agent
+Each agent gets its own Langfuse environment:
+- VS Code Copilot Chat → environment `github-copilot-chat`
+- Claude Code → environment `claude-code`
 
-| Step | Detail |
-|------|--------|
-| **1. Seed two projects** | After Langfuse starts + health check passes, use Langfuse API to create a second project (INIT vars only support one) |
-| **2. Store per-agent keys** | `globalState`: `langfuse.copilot.publicKey`, `langfuse.claude.publicKey`, etc. |
-| **3. Pass agent-specific keys to hook** | Config file gets per-agent sections; hook script reads based on detected agent |
-| **4. Update dashboard link** | Sidebar UI could link to filtered project view |
+Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views (traces, sessions, observations, scores).
 
-**Why defer:** Langfuse INIT seeding only supports 1 project. Creating a 2nd requires hitting the Langfuse REST API post-setup (auth, org lookup, project creation, key extraction). That's ~100 lines of new API integration code — not worth blocking v0.1 for.
+**Why environments over tags/projects:**
 
-### Alternative: `TRACE_AGENTS` env var (v0.2)
+| Approach | Filtering | UX | Complexity |
+|----------|-----------|-----|------------|
+| Tags | Per-view filter, must re-apply each time | Ok | Low |
+| Separate projects | Switch projects in dropdown | Good but heavy | High (API needed for 2nd project) |
+| **Environments** | **Global nav-bar filter, persists across all views** | **Best** | **Low** |
+
+### Org/Project Naming
+- Org: **Agent Tracing** (matches extension name)
+- Project: **Agent Traces** (describes content — not "Local" which is vague)
+- Environments auto-created on first trace ingestion
+
+### Future (v0.2+): `TRACE_AGENTS` env var
 If a user only wants to trace one agent:
 ```json
 {

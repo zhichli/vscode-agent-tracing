@@ -150,6 +150,19 @@ Both agents share **a single hook entry** in `~/.claude/settings.json`. The entr
 | Reads env from | `env` embedded in hook object | Root-level `env` |
 | Hook entry | Same entry | Same entry |
 
+#### Agent Isolation via Langfuse Environments
+
+The hook script sets the Langfuse `environment` parameter based on the detected agent:
+- VS Code Copilot Chat → `github-copilot-chat`
+- Claude Code → `claude-code`
+
+Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views (traces, sessions, observations). Environments are auto-created on first trace ingestion.
+
+#### Langfuse Project Naming
+- **Org:** Agent Tracing
+- **Project:** Agent Traces
+- Seeded via `LANGFUSE_INIT_*` env vars in Docker Compose
+
 #### Shared Hook Script
 
 Both configs point to the **same script** at `~/.claude/hooks/langfuse_hook.py`. The script is installed once and reused for both agents. It detects the calling agent at runtime via stdin format.
