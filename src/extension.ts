@@ -258,7 +258,7 @@ export function activate(context: vscode.ExtensionContext) {
   if (autoStart) {
     langfuse.start().then(() => provider.refresh()).catch(() => {});
   } else {
-    checkAndNudge(langfuse, hookManager, provider);
+    checkAndNudge(context, langfuse, hookManager, provider);
   }
 
   // Initial refresh
@@ -267,11 +267,16 @@ export function activate(context: vscode.ExtensionContext) {
 
 /** Silently check if hooks are installed but Langfuse isn't running, prompt once. */
 async function checkAndNudge(
+  context: vscode.ExtensionContext,
   langfuse: LangfuseManager,
   hookManager: HookManager,
   provider: TracingSolutionsTreeProvider,
 ): Promise<void> {
   try {
+    // Debounce: skip if nudged within the last 5 minutes (multi-window protection)
+    const lastNudge = context.globalState.get<number>("nudge.lastShown") ?? 0;
+    if (Date.now() - lastNudge < 5 * 60 * 1000) return;
+
     const installed = hookManager.isHookInstalled();
     if (!installed) return;
 
@@ -286,6 +291,7 @@ async function checkAndNudge(
       "Start Langfuse",
       "Dismiss",
     );
+    await context.globalState.update("nudge.lastShown", Date.now());
     if (action === "Start Langfuse") {
       await vscode.window.withProgress(
         {
