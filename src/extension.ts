@@ -165,7 +165,6 @@ title: "Agent Tracing",
           },
           async (progress) => {
             await langfuse.purge((msg) => progress.report({ message: msg }));
-            hookManager.disableHooks();
             provider.refresh();
           },
         );
