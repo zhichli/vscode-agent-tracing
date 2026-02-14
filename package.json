@@ -52,85 +52,99 @@
     "commands": [
       {
         "command": "agentTracing.setup",
-        "title": "Agent Tracing: Full Setup",
+        "category": "Agent Tracing",
+        "title": "Full Setup",
         "shortTitle": "Setup — install hooks, start Langfuse, open dashboard",
         "icon": "$(play)"
       },
       {
         "command": "agentTracing.startStack",
-        "title": "Agent Tracing: Start Stack",
+        "category": "Agent Tracing",
+        "title": "Start Stack",
         "shortTitle": "Start Langfuse stack (docker compose up)",
         "icon": "$(play)"
       },
       {
         "command": "agentTracing.stopStack",
-        "title": "Agent Tracing: Stop Stack",
+        "category": "Agent Tracing",
+        "title": "Stop Stack",
         "shortTitle": "Stop Langfuse stack (data preserved)",
         "icon": "$(primitive-square)"
       },
       {
         "command": "agentTracing.recreateStack",
-        "title": "Agent Tracing: Recreate Stack",
+        "category": "Agent Tracing",
+        "title": "Recreate Stack",
         "shortTitle": "Recreate — rebuild containers, keep trace data",
         "icon": "$(debug-restart)"
       },
       {
         "command": "agentTracing.purgeStack",
-        "title": "Agent Tracing: Delete Stack",
+        "category": "Agent Tracing",
+        "title": "Delete Stack",
         "shortTitle": "Delete — remove containers + all trace data",
         "icon": "$(trash)"
       },
       {
         "command": "agentTracing.openDashboard",
-        "title": "Agent Tracing: Open Dashboard (Integrated Browser)",
+        "category": "Agent Tracing",
+        "title": "Open Dashboard",
         "shortTitle": "Open Langfuse dashboard in VS Code",
         "icon": "$(open-preview)"
       },
       {
         "command": "agentTracing.openDashboardExternal",
-        "title": "Agent Tracing: Open Dashboard (External Browser)",
+        "category": "Agent Tracing",
+        "title": "Open Dashboard (External Browser)",
         "shortTitle": "Open Langfuse dashboard in system browser",
         "icon": "$(link-external)"
       },
       {
         "command": "agentTracing.showLoginInfo",
-        "title": "Agent Tracing: Show Login Info",
+        "category": "Agent Tracing",
+        "title": "Login Info",
         "shortTitle": "Show Langfuse login email and password",
         "icon": "$(key)"
       },
       {
         "command": "agentTracing.refresh",
-        "title": "Agent Tracing: Refresh",
+        "category": "Agent Tracing",
+        "title": "Refresh",
         "shortTitle": "Refresh status",
         "icon": "$(refresh)"
       },
       {
         "command": "agentTracing.enableHook",
-        "title": "Agent Tracing: Enable Hooks",
+        "category": "Agent Tracing",
+        "title": "Enable Hooks",
         "shortTitle": "Enable tracing hooks for all agents",
         "icon": "$(plug)"
       },
       {
         "command": "agentTracing.disableHook",
-        "title": "Agent Tracing: Disable Hooks",
+        "category": "Agent Tracing",
+        "title": "Disable Hooks",
         "shortTitle": "Disable tracing hooks (script stays on disk)",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "agentTracing.connectExternal",
-        "title": "Agent Tracing: Connect to Existing Langfuse",
+        "category": "Agent Tracing",
+        "title": "Connect to Existing Langfuse",
         "shortTitle": "Connect to a running Langfuse instance",
         "icon": "$(plug)"
       },
       {
         "command": "agentTracing.disconnect",
-        "title": "Agent Tracing: Disconnect External Langfuse",
+        "category": "Agent Tracing",
+        "title": "Disconnect External Langfuse",
         "shortTitle": "Disconnect from external Langfuse",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "agentTracing.showStackVersion",
-        "title": "Agent Tracing: Stack Info",
+        "category": "Agent Tracing",
+        "title": "Stack Info",
         "shortTitle": "Show pinned Docker image versions",
         "icon": "$(info)"
       }
