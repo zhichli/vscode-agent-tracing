@@ -45,7 +45,7 @@
       "agentTracing": [
         {
           "id": "agentTracing.solutions",
-          "name": "Tracing Solutions"
+          "name": ""
         }
       ]
     },
@@ -53,61 +53,73 @@
       {
         "command": "agentTracing.setup",
         "title": "Agent Tracing: Full Setup",
+        "shortTitle": "Setup",
         "icon": "$(play)"
       },
       {
         "command": "agentTracing.startStack",
         "title": "Agent Tracing: Start Stack",
+        "shortTitle": "Start",
         "icon": "$(play)"
       },
       {
         "command": "agentTracing.stopStack",
         "title": "Agent Tracing: Stop Stack",
+        "shortTitle": "Stop",
         "icon": "$(primitive-square)"
       },
       {
         "command": "agentTracing.openDashboard",
         "title": "Agent Tracing: Open Dashboard (Integrated Browser)",
+        "shortTitle": "Open Dashboard",
         "icon": "$(open-preview)"
       },
       {
         "command": "agentTracing.openDashboardExternal",
         "title": "Agent Tracing: Open Dashboard (External Browser)",
+        "shortTitle": "Open in Browser",
         "icon": "$(link-external)"
       },
       {
         "command": "agentTracing.showLoginInfo",
         "title": "Agent Tracing: Show Login Info",
+        "shortTitle": "Login Info",
         "icon": "$(key)"
       },
       {
         "command": "agentTracing.refresh",
         "title": "Agent Tracing: Refresh",
+        "shortTitle": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "command": "agentTracing.enableHook",
         "title": "Agent Tracing: Enable Hooks",
+        "shortTitle": "Enable Hooks",
         "icon": "$(circle-slash)"
       },
       {
         "command": "agentTracing.disableHook",
         "title": "Agent Tracing: Disable Hooks",
+        "shortTitle": "Disable Hooks",
         "icon": "$(broadcast)"
       },
       {
         "command": "agentTracing.connectExternal",
         "title": "Agent Tracing: Connect to Existing Langfuse",
+        "shortTitle": "Connect External",
         "icon": "$(plug)"
       },
       {
         "command": "agentTracing.disconnect",
         "title": "Agent Tracing: Disconnect External Langfuse",
+        "shortTitle": "Disconnect",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "agentTracing.showStackVersion",
         "title": "Agent Tracing: Show Stack Version",
+        "shortTitle": "Stack Version",
         "icon": "$(info)"
       }
     ],
