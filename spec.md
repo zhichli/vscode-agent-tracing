@@ -40,40 +40,42 @@ TRACING SOLUTIONS                                    [↻] [...]
 
 ```
 TRACING SOLUTIONS                                    [↻] [...]
-├── Langfuse                  Running — localhost:3000    [🔑] [⏹] [🔗]
-│   ├── GitHub Copilot Chat   Tracing
-│   └── Claude                Tracing
+├── Langfuse                  Running — localhost:3000    [✕] [⏹] [📄] [🔗]
 ```
 
-- Langfuse: icon `$(pass-filled)` green. Inline: **Login Info** `$(key)`, **Stop** `$(debug-stop)`, **Open Dashboard** `$(link-external)`. Click row → opens dashboard.
+- Langfuse: icon `$(pass-filled)` green. Leaf node (no children).
+- Inline L→R: **Disable Hooks** `$(close)`, **Stop** `$(debug-stop)`, **Open Dashboard** `$(open-preview)`, **Open External** `$(link-external)`.
+- Click row → opens dashboard in integrated browser.
+- Right-click context menu: **Login Info**, **Stack Version**.
 - **Login Info** opens a modal dialog (`vscode.window.showInformationMessage` with `modal: true`) displaying email and password, with **Copy Email** and **Copy Password** buttons.
-- Agent children (expanded by default):
-  - icon `$(check)` green, description `Tracing` when hook is installed. Inline: **Disable** `$(close)`.
-  - icon `$(circle-outline)` dimmed, description `Not tracing` when hook is not installed. Inline: **Enable** `$(plug)`.
-  - Each agent is independent — one can be tracing while the other is not.
 
-#### Running + Mixed Hook State
+#### Running + Hooks Disabled
 
 ```
 TRACING SOLUTIONS                                    [↻] [...]
-├── Langfuse                  Running — localhost:3000    [🔑] [⏹] [🔗]
-│   ├── GitHub Copilot Chat   Tracing                      [✕]
-│   └── Claude                Not tracing                   [🔌]
+├── Langfuse                  Running — localhost:3000    [🔌] [⏹] [📄] [🔗]
 ```
 
-- Each agent independently shows its hook status. User can enable/disable each separately via inline icons.
+- Same as above but inline @1 is **Enable Hooks** `$(plug)` instead of Disable.
 
-#### Stopped
+#### Stopped + Hooks Enabled
 
 ```
 TRACING SOLUTIONS                                    [↻] [...]
-├── Langfuse                  Stopped                    [▶]
-│   ├── GitHub Copilot Chat   Tracing
-│   └── Claude                Tracing
+├── Langfuse                  Stopped                    [▶] [✕]
 ```
 
-- Icon `$(circle-outline)` dimmed. Inline: **Start** `$(play)` (docker compose up only, no setup wizard).
-- Agent children visible, hooks still installed.
+- Icon `$(circle-outline)` dimmed. Inline: **Start** `$(play)`, **Disable Hooks** `$(close)`.
+- Right-click: Connect External, Stack Version.
+
+#### Stopped + Hooks Disabled
+
+```
+TRACING SOLUTIONS                                    [↻] [...]
+├── Langfuse                  Stopped                    [▶] [🔌]
+```
+
+- Inline: **Start** `$(play)`, **Enable Hooks** `$(plug)`.
 
 #### Docker Not Available
 
@@ -92,7 +94,7 @@ Triggered by **Setup** on an unconfigured/error Langfuse node. No agent selectio
 
 | Step | Detail |
 |------|--------|
-| **1. Install hooks** | Writes hook config + script + config file for both agents (see §4). |
+| **1. Install hooks** | Writes single hook entry (env embedded + root env) + script + config file (see §4). |
 | **2. Python check** | `python3 -c "import langfuse"` → if missing, `pip3 install --user langfuse`. |
 | **3. Docker check** | `docker info` → fail with actionable error if unavailable. |
 | **4. Start Langfuse** | `docker compose up -d --wait` (web, worker, postgres, clickhouse, redis, minio). |
@@ -107,41 +109,25 @@ Triggered by **Setup** on an unconfigured/error Langfuse node. No agent selectio
 
 #### Tested Hook Formats
 
-The two agents use different config formats and locations (verified manually):
+Both agents share **a single hook entry** in `~/.claude/settings.json`. The entry has `env` embedded in the hook object (read by VS Code agent) and root-level `env` (read by Claude agent). This avoids duplicate hook executions:
 
-**VS Code Copilot Chat** — Copilot format, workspace-scoped:
 ```json
-// {workspace}/.github/hooks/agent-tracing.json
+// ~/.claude/settings.json — single entry, serves both agents
 {
   "hooks": {
     "Stop": [
       {
-        "type": "command",
-        "command": "python3 ~/.claude/hooks/langfuse_hook.py",
-        "timeout": 60,
-        "env": {
-          "TRACE_TO_LANGFUSE": "true",
-          "LANGFUSE_PUBLIC_KEY": "<pk>",
-          "LANGFUSE_SECRET_KEY": "<sk>",
-          "LANGFUSE_HOST": "http://localhost:3000"
-        }
-      }
-    ]
-  }
-}
-```
-
-**Claude Code** — Claude format, user-scoped:
-```json
-// ~/.claude/settings.json
-{
-  "hooks": {
-    "Stop": [
-      {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.claude/hooks/langfuse_hook.py"
+            "command": "python3 ~/.claude/hooks/langfuse_hook.py",
+            "env": {
+              "TRACE_TO_LANGFUSE": "true",
+              "LANGFUSE_PUBLIC_KEY": "<pk>",
+              "LANGFUSE_SECRET_KEY": "<sk>",
+              "LANGFUSE_HOST": "http://localhost:3000"
+            }
           }
         ]
       }
@@ -156,14 +142,13 @@ The two agents use different config formats and locations (verified manually):
 }
 ```
 
-#### Key Differences
+#### How Each Agent Reads It
 
 | | VS Code Copilot Chat | Claude Code |
 |-|---------------------|-------------|
-| Config path | `{workspace}/.github/hooks/agent-tracing.json` | `~/.claude/settings.json` |
-| Scope | Workspace (per-project) | User (global) |
-| Hook format | `{ type, command, timeout, env }` directly in array | `{ hooks: [{ type, command }] }` wrapper |
-| Env vars | Embedded per-hook in `env` field | Root-level `env` in settings.json |
+| Config path | `~/.claude/settings.json` | `~/.claude/settings.json` |
+| Reads env from | `env` embedded in hook object | Root-level `env` |
+| Hook entry | Same entry | Same entry |
 
 #### Shared Hook Script
 
@@ -203,11 +188,8 @@ This way:
 #### File Layout
 
 ```
-{workspace}/.github/hooks/
-└── agent-tracing.json           ← VS Code hook config (Copilot format, env embedded)
-
 ~/.claude/
-├── settings.json                ← Claude hook config (merged) + root env vars
+├── settings.json                ← Both VS Code + Claude hook configs (merged) + root env vars
 └── hooks/
     ├── langfuse_hook.py         ← Single script, shared by both agents
     └── .langfuse_config.json    ← Langfuse keys + log dir (written by extension)
@@ -217,21 +199,18 @@ This way:
 
 1. **`~/.claude/hooks/langfuse_hook.py`** — Copies script from extension resources. `chmod +x`.
 2. **`~/.claude/hooks/.langfuse_config.json`** — Writes keys and log dir from `globalState`.
-3. **`~/.claude/settings.json`** — Merges hook entry into `hooks.Stop` and keys into root `env` (for Claude).
-4. **`{workspace}/.github/hooks/agent-tracing.json`** — Writes standalone file with env embedded (for VS Code). Requires open workspace.
+3. **`~/.claude/settings.json`** — Writes single hook entry with embedded `env` AND sets root-level `env`.
 
 #### Hook Status Detection
 
-- **VS Code hook**: Check if `{workspace}/.github/hooks/agent-tracing.json` exists.
-- **Claude hook**: Check if `~/.claude/settings.json` contains a `hooks.Stop` entry referencing `langfuse_hook.py`.
-- Both checks are independent — one agent can be hooked without the other.
+- Check if `~/.claude/settings.json` contains a `hooks.Stop` entry referencing `langfuse_hook.py`.
+- Single boolean: hooks installed or not.
 
 #### Enable / Disable
 
-Since hooks are now separate per-agent, enable/disable works per-agent:
-- **Disable VS Code hook**: Delete `{workspace}/.github/hooks/agent-tracing.json`.
-- **Disable Claude hook**: Remove the `langfuse_hook.py` entry from `~/.claude/settings.json`.
-- **Enable**: Re-write the config file / entry using keys from `.langfuse_config.json`.
+Single toggle (not per-agent):
+- **Disable**: Remove the `langfuse_hook.py` entry from `hooks.Stop` + remove Langfuse env keys from root `env`.
+- **Enable**: Re-add entry + root env using keys from `.langfuse_config.json`.
 
 ---
 
@@ -252,14 +231,14 @@ log_file = Path(config["log_dir"]) / agent / datetime.now().strftime("%Y-%m-%d")
 
 ### 6. Hooks Enable / Disable
 
-Since hooks are per-agent (different files and formats), each agent child node has its own toggle.
+Hooks use a single toggle on the Langfuse node (not per-agent).
 
 | Action | Trigger | Behavior |
 |--------|---------|----------|
-| **Disable agent** | `$(close)` inline icon on tracing agent child | VS Code: deletes `{workspace}/.github/hooks/agent-tracing.json`. Claude: removes `langfuse_hook.py` entry from `~/.claude/settings.json`. Script + `.langfuse_config.json` stay on disk for re-enable. |
-| **Enable agent** | `$(plug)` inline icon on non-tracing agent child | Writes config back using keys from `.langfuse_config.json`. VS Code: creates `agent-tracing.json`. Claude: adds entry to `settings.json`. |
+| **Disable hooks** | `$(close)` inline icon on Langfuse node (leftmost) | Removes hook entry from `~/.claude/settings.json` + cleans root env keys. Script + `.langfuse_config.json` stay on disk for re-enable. |
+| **Enable hooks** | `$(plug)` inline icon on Langfuse node (leftmost) | Writes hook entry + root env back using persisted keys. |
 
-Also available via command palette: `Agent Tracing: Enable Hook` / `Agent Tracing: Disable Hook` (prompts for agent if ambiguous).
+Also available via command palette: `Agent Tracing: Enable Hook` / `Agent Tracing: Disable Hook`.
 
 No confirmation dialog — lightweight toggle.
 
@@ -269,10 +248,10 @@ No confirmation dialog — lightweight toggle.
 
 | Principle | Description |
 |-----------|-------------|
-| **Actions on items** | Setup/Stop/Open are inline icons on tree items, not title bar buttons. |
-| **Progressive disclosure** | Fresh: one row, one button. Post-setup: tree expands with agent children. |
-| **Status at a glance** | Green = running/tracing. Dimmed = stopped/not tracing. Yellow = problem. |
-| **Per-agent control** | Each agent has its own config file → independent enable/disable. |
+| **Actions on items** | Setup/Stop/Open/Hook toggle are inline icons on the Langfuse node, not title bar buttons. |
+| **Progressive disclosure** | Fresh: one row, one button. Post-setup: inline icons change to reflect state. |
+| **Status at a glance** | Green = running. Dimmed = stopped/not configured. Yellow = problem. Hook toggle icon shows enable/disable state. |
+| **Single toggle** | One hook entry serves both agents. Future: `TRACE_AGENTS` env var for per-agent filtering. |
 | **Fail fast** | Missing Docker/pip/python → actionable error message. No silent failures. |
 
 ---
@@ -301,7 +280,7 @@ No confirmation dialog — lightweight toggle.
 | Real-time trace viewer | Langfuse dashboard handles this. |
 | Trace export/backup | Docker volumes persist data. |
 | Auto-start on launch | User starts explicitly. |
-| Per-agent hook customization | Enable/disable is per-agent, but hook script and config are shared. No per-agent trace filtering. |
+| Per-agent hook customization | Single hook entry serves both agents. Per-agent filtering via `TRACE_AGENTS` env var is a future option. |
 | Windows native paths | WSL works for now. |
 
 ---
@@ -323,17 +302,14 @@ No confirmation dialog — lightweight toggle.
 
 ```
   TRACING SOLUTIONS                           [↻] [...]
-  ├── Langfuse  Running — localhost:3000      [🔑] [⏹] [🔗]
-  │   ├── GitHub Copilot Chat  Tracing          [✕]
-  │   └── Claude               Tracing          [✕]
+  ├── Langfuse  Running — localhost:3000      [✕] [⏹] [📄] [🔗]
          │
     Setup (one click, no prompts):
       Install hooks → pip check → Docker check
       → docker compose up → health poll → open browser
          │
-    Hook files (per-agent config, shared script):
-      VS Code:  {workspace}/.github/hooks/agent-tracing.json
-      Claude:   ~/.claude/settings.json (merged entry + root env)
+    Hook config (~/.claude/settings.json):
+      Single entry: env embedded (VS Code) + root env (Claude)
       Script:   ~/.claude/hooks/langfuse_hook.py
       Keys:     ~/.claude/hooks/.langfuse_config.json
          │

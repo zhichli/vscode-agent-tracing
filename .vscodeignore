@@ -6,3 +6,7 @@ esbuild.js
 .gitignore
 **/*.ts
 **/*.map
+spec.md
+plan.md
+CONTRIBUTING.md
+TROUBLESHOOTING.md
