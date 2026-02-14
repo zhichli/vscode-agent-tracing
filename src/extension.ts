@@ -57,7 +57,7 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Agent Tracing: Setting up…",
+title: "Agent Tracing",
           cancellable: false,
         },
         async (progress) => {
@@ -89,7 +89,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing: Starting Langfuse…",
+            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing: Stopping Langfuse…",
+            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
@@ -154,13 +154,13 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing: Enabling hooks…",
+            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
             progress.report({ message: "Installing hook script…" });
             hookManager.enableHooks();
-            progress.report({ message: "Writing hook config to ~/.claude/settings.json…" });
+            progress.report({ message: "Hook config written to ~/.claude/settings.json" });
             provider.refresh();
           },
         );
@@ -176,11 +176,11 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing: Disabling hooks…",
+            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
-            progress.report({ message: "Removing hook entry from ~/.claude/settings.json…" });
+            progress.report({ message: "Removing hook entry from ~/.claude/settings.json" });
             hookManager.disableHooks();
             provider.refresh();
           },
@@ -317,7 +317,7 @@ async function checkAndNudge(
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Agent Tracing: Starting Langfuse…",
+          title: "Agent Tracing",
           cancellable: false,
         },
         async (progress) => {

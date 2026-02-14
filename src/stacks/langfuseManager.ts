@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import * as crypto from "crypto";
-import { exec } from "../exec";
+import { exec, execStreaming } from "../exec";
 import {
   LANGFUSE_STACK_VERSION,
   formatLangfuseStackSummary,
@@ -144,11 +144,17 @@ export class LangfuseManager {
     step("Ensuring compose file is up to date…");
     this.writeComposeFile(); // ensure file exists
 
-    step("Starting Langfuse v3 stack (web, worker, postgres, clickhouse, redis, minio)…");
+    step("docker compose up -d --wait");
     try {
-      await exec(
+      await execStreaming(
         `docker compose -p agent-tracing -f "${this.composePath}" up -d --wait`,
-        { timeout: 180_000 },
+        {
+          timeout: 180_000,
+          onLine: (line) => {
+            this.output.info(`  ${line}`);
+            report?.(line);
+          },
+        },
       );
     } catch (e: any) {
       const msg = e.message ?? "";
@@ -160,7 +166,7 @@ export class LangfuseManager {
       }
       throw e;
     }
-    step("Langfuse stack containers started.");
+    step("All containers started.");
   }
 
   async stop(report?: StepReporter): Promise<void> {
@@ -174,12 +180,18 @@ export class LangfuseManager {
         "No managed Langfuse stack found. The running instance may be external — use 'Connect to Existing' instead.",
       );
     }
-    step("Stopping Langfuse stack…");
-    await exec(
+    step("docker compose down");
+    await execStreaming(
       `docker compose -p agent-tracing -f "${this.composePath}" down`,
-      { timeout: 60_000 },
+      {
+        timeout: 60_000,
+        onLine: (line) => {
+          this.output.info(`  ${line}`);
+          report?.(line);
+        },
+      },
     );
-    step("Langfuse stack stopped.");
+    step("All containers stopped.");
   }
 
   async isRunning(): Promise<boolean> {
