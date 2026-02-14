@@ -45,6 +45,12 @@ KEY_SOURCE = "env" if _env_pk else ("config" if _config.get("public_key") else "
 LOG_DIR = _config.get("log_dir", "")
 DEBUG = os.environ.get("CC_LANGFUSE_DEBUG", "").lower() == "true"
 
+# Agent environment names for Langfuse (used as tracing environments)
+AGENT_ENVIRONMENTS = {
+    "github-copilot-chat": "github-copilot-chat",
+    "claude": "claude-code",
+}
+
 try:
     from langfuse import Langfuse
 except ImportError:
@@ -282,6 +288,7 @@ def create_vscode_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
 
     with langfuse.start_as_current_span(
         name=f"Turn {turn_num}",
+        session_id=session_id,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
@@ -498,6 +505,7 @@ def create_claude_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
 
     with langfuse.start_as_current_span(
         name=f"Turn {turn_num}",
+        session_id=session_id,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
@@ -618,7 +626,12 @@ def main() -> None:
             log("ERROR", f"Langfuse API keys not set (source={KEY_SOURCE})", agent, session_id)
             output_and_exit()
 
-        langfuse = Langfuse(public_key=LANGFUSE_PUBLIC_KEY, secret_key=LANGFUSE_SECRET_KEY, host=LANGFUSE_HOST)
+        langfuse = Langfuse(
+            public_key=LANGFUSE_PUBLIC_KEY,
+            secret_key=LANGFUSE_SECRET_KEY,
+            host=LANGFUSE_HOST,
+            environment=AGENT_ENVIRONMENTS.get(agent, "default"),
+        )
 
         if agent == "github-copilot-chat":
             turns = process_vscode(langfuse, hook_input)
