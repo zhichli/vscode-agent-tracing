@@ -421,8 +421,8 @@ services:
       # Auto-seed org, project, and user so hooks work with zero manual setup
       LANGFUSE_INIT_ORG_ID: agent-tracing-org
       LANGFUSE_INIT_ORG_NAME: Agent Tracing
-      LANGFUSE_INIT_PROJECT_ID: agent-tracing-project
-      LANGFUSE_INIT_PROJECT_NAME: Local
+      LANGFUSE_INIT_PROJECT_ID: agent-tracing-default
+      LANGFUSE_INIT_PROJECT_NAME: Agent Traces
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${pk}"
       LANGFUSE_INIT_PROJECT_SECRET_KEY: "${sk}"
       LANGFUSE_INIT_USER_EMAIL: local@agent-tracing.dev

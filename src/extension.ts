@@ -150,16 +150,24 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Enable hooks
     vscode.commands.registerCommand("agentTracing.enableHook", async () => {
-      hookManager.enableHooks();
-      provider.refresh();
-      flashStatus("Hooks enabled");
+      try {
+        hookManager.enableHooks();
+        provider.refresh();
+        flashStatus("Hooks enabled");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
+      }
     }),
 
     // Disable hooks
     vscode.commands.registerCommand("agentTracing.disableHook", async () => {
-      hookManager.disableHooks();
-      provider.refresh();
-      flashStatus("Hooks disabled");
+      try {
+        hookManager.disableHooks();
+        provider.refresh();
+        flashStatus("Hooks disabled");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
+      }
     }),
 
     // Connect to existing Langfuse instance (external mode)
@@ -232,6 +240,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Disconnect from external Langfuse
     vscode.commands.registerCommand("agentTracing.disconnect", async () => {
+      try {
+        hookManager.disableHooks();
+      } catch {
+        // best-effort hook cleanup
+      }
       await langfuse.disconnect();
       provider.refresh();
       flashStatus("Disconnected from Langfuse");
