@@ -10,7 +10,7 @@
 **Files:** `resources/hooks/langfuse_hook.py`  
 **Scope:** ~20 lines  
 **Status:** DONE  
-**What:** Set `environment` on Langfuse client (per-agent: `github-copilot-chat` / `claude-code`) and pass `session_id` to `start_as_current_span()`. Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views.
+**What:** Set `environment` on Langfuse client (per-agent: `github-copilot-chat` / `claude`) and pass `session_id` to `start_as_current_span()`. Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views.
 
 ```python
 langfuse = Langfuse(
@@ -71,7 +71,7 @@ vscode.commands.registerCommand("agentTracing.disconnect", async () => {
 - [ ] Setup completes without errors
 - [ ] Dashboard opens and loads
 - [ ] Hook fires on Copilot Chat stop event → trace appears
-- [ ] Hook fires on Claude Code stop event → trace appears
+- [ ] Hook fires on Claude stop event → trace appears
 - [ ] Session grouping works in Langfuse
 - [ ] Tag filtering works (separate agents)
 - [ ] Enable/disable toggle works
@@ -242,7 +242,7 @@ npx vsce publish
 
 Each agent gets its own Langfuse environment:
 - VS Code Copilot Chat → environment `github-copilot-chat`
-- Claude Code → environment `claude-code`
+- Claude → environment `claude`
 
 Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views (traces, sessions, observations, scores).
 
@@ -255,8 +255,9 @@ Users filter by environment in the Langfuse nav-bar dropdown — applies globall
 | **Environments** | **Global nav-bar filter, persists across all views** | **Best** | **Low** |
 
 ### Org/Project Naming
-- Org: **Agent Tracing** (matches extension name)
-- Project: **Agent Traces** (describes content — not "Local" which is vague)
+- Org: **Local** (represents the local machine — local-first tool)
+- Project: **Agent Traces** (describes content)
+- Nav header: `Local › Agent Traces`
 - Environments auto-created on first trace ingestion
 
 ### Future (v0.2+): `TRACE_AGENTS` env var

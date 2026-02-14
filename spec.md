@@ -4,7 +4,7 @@
 
 ### 🧠 One-Line Definition
 
-> **A VS Code extension that gives AI coding agents (GitHub Copilot Chat, Claude Code) local-first observability through one-click tracing setup with pluggable backends.**
+> **A VS Code extension that gives AI coding agents (GitHub Copilot Chat, Claude) local-first observability through one-click tracing setup with pluggable backends.**
 
 ### Top Principles
 
@@ -144,7 +144,7 @@ Both agents share **a single hook entry** in `~/.claude/settings.json`. The entr
 
 #### How Each Agent Reads It
 
-| | VS Code Copilot Chat | Claude Code |
+| | VS Code Copilot Chat | Claude |
 |-|---------------------|-------------|
 | Config path | `~/.claude/settings.json` | `~/.claude/settings.json` |
 | Reads env from | `env` embedded in hook object | Root-level `env` |
@@ -154,13 +154,14 @@ Both agents share **a single hook entry** in `~/.claude/settings.json`. The entr
 
 The hook script sets the Langfuse `environment` parameter based on the detected agent:
 - VS Code Copilot Chat → `github-copilot-chat`
-- Claude Code → `claude-code`
+- Claude → `claude`
 
 Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views (traces, sessions, observations). Environments are auto-created on first trace ingestion.
 
 #### Langfuse Project Naming
-- **Org:** Agent Tracing
-- **Project:** Agent Traces
+- **Org:** Local (represents the local machine — local-first tool)
+- **Project:** Agent Traces (describes the content)
+- Nav header: `Local › Agent Traces`
 - Seeded via `LANGFUSE_INIT_*` env vars in Docker Compose
 
 #### Shared Hook Script
@@ -277,7 +278,7 @@ No confirmation dialog — lightweight toggle.
 | Windows (WSL) | Supported |
 | Windows (native) | Future |
 | VS Code forks (Cursor, Windsurf) | Future |
-| GitHub Copilot Chat + Claude Code | Primary |
+| GitHub Copilot Chat + Claude | Primary |
 | Other agents (Cline, Roo) | Future |
 | Langfuse (self-hosted) | Primary |
 | Langfuse (cloud) / Phoenix / Jaeger | Future |

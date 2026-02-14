@@ -1,14 +1,14 @@
 # Agent Tracing
 
 **Local-first observability for AI coding agents.**  
-One-click tracing setup for VS Code Copilot Chat and Claude Code with Langfuse — no cloud accounts required.
+One-click tracing setup for VS Code Copilot Chat and Claude with Langfuse — no cloud accounts required.
 
 ---
 
 ## Features
 
 - **One-click setup** — Spins up Langfuse (Docker), installs hooks, wires API keys, opens the dashboard
-- **Dual agent support** — Traces from both GitHub Copilot Chat and Claude Code sessions
+- **Dual agent support** — Traces from both GitHub Copilot Chat and Claude sessions
 - **Hook toggle** — Enable/disable tracing with a single inline icon
 - **Zero-config tracing** — Hooks fire automatically on every agent Stop event
 - **Connect to existing** — Point at any running Langfuse instance (cloud or self-hosted)
@@ -19,7 +19,7 @@ One-click tracing setup for VS Code Copilot Chat and Claude Code with Langfuse �
 1. **Install** the extension from the VS Code Marketplace
 2. Click the **Agent Tracing** icon in the Activity Bar
 3. Click **▶ Setup** on the Langfuse row
-4. Start using Copilot Chat or Claude Code — traces appear in the Langfuse dashboard
+4. Start using Copilot Chat or Claude — traces appear in the Langfuse dashboard
 
 > Requires **Docker** (for the Langfuse stack) and **Python 3** (for hook scripts; `langfuse` pip package is auto-installed).
 
@@ -29,12 +29,12 @@ One-click tracing setup for VS Code Copilot Chat and Claude Code with Langfuse �
 Agent Session → Stop Hook → Parse Transcript → Send to Langfuse → View in Dashboard
 ```
 
-The extension uses the VS Code [hooks system](https://code.visualstudio.com/docs/copilot/customization/hooks) and Claude Code's [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to capture session transcripts after each agent response.
+The extension uses the VS Code [hooks system](https://code.visualstudio.com/docs/copilot/customization/hooks) and Claude's [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to capture session transcripts after each agent response.
 
 A single shared Python script (`~/.claude/hooks/langfuse_hook.py`) detects the calling agent at runtime and handles both transcript formats. Both agents share a single hook entry in `~/.claude/settings.json`:
 
 - **VS Code Copilot Chat** reads env vars from the `env` field embedded in the hook object
-- **Claude Code** reads env vars from the root-level `env` key in settings.json
+- **Claude** reads env vars from the root-level `env` key in settings.json
 
 This means one hook execution per event — no duplicates.
 

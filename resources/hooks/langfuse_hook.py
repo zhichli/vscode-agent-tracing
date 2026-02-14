@@ -2,10 +2,10 @@
 """
 Agent Tracing — Unified Langfuse tracing hook.
 
-Shared by both VS Code Copilot Chat and Claude Code. Detects the calling
+Shared by both VS Code Copilot Chat and Claude. Detects the calling
 agent at runtime via stdin format:
   - VS Code: stdin contains {"hookEventName": ..., "transcript_path": ..., "sessionId": ...}
-  - Claude Code: stdin is empty or has no hookEventName; reads latest transcript from ~/.claude/projects/
+  - Claude: stdin is empty or has no hookEventName; reads latest transcript from ~/.claude/projects/
 
 Install: managed automatically by the Agent Tracing VS Code extension.
 """
@@ -48,7 +48,7 @@ DEBUG = os.environ.get("CC_LANGFUSE_DEBUG", "").lower() == "true"
 # Agent environment names for Langfuse (used as tracing environments)
 AGENT_ENVIRONMENTS = {
     "github-copilot-chat": "github-copilot-chat",
-    "claude": "claude-code",
+    "claude": "claude",
 }
 
 try:
@@ -385,7 +385,7 @@ def process_vscode(langfuse: Langfuse, hook_input: dict) -> int:
 
 
 # ===========================================================================
-# Claude Code handler
+# Claude handler
 # ===========================================================================
 
 def get_content(msg: dict) -> Any:
@@ -498,7 +498,7 @@ def create_claude_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
     final_output = next((t for t in reversed(assistant_texts) if t), "")
 
     metadata: dict[str, Any] = {
-        "source": "claude-code",
+        "source": "claude",
         "turn_number": turn_num,
         "session_id": session_id,
     }

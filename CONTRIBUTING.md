@@ -113,7 +113,7 @@ Both agents share a single entry in `~/.claude/settings.json`:
 ```
 
 - **VS Code Copilot Chat** reads `env` from the inner hook object
-- **Claude Code** reads `env` from the root-level `env` key
+- **Claude** reads `env` from the root-level `env` key
 - Single entry → single execution per Stop event → no duplicate traces
 
 ### Robustness Rules

@@ -114,7 +114,7 @@ cat ~/.claude/hooks/.langfuse_config.json | python3 -c "import sys,json; print(j
 Both agents share a single hook entry. If one works, the hook script and Langfuse are fine. Check:
 
 1. **VS Code Copilot Chat** — requires an active Copilot subscription and a chat session that generates a transcript
-2. **Claude Code** — requires Claude Code to be installed and have at least one session in `~/.claude/projects/`
+2. **Claude** — requires Claude to be installed and have at least one session in `~/.claude/projects/`
 
 Look at the aggregate `hook.log` for the `agent=` field to confirm which agent is firing.
 

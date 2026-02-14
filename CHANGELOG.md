@@ -4,7 +4,7 @@
 
 ### Features
 - One-click Langfuse Docker stack setup (web, worker, postgres, clickhouse, redis, minio)
-- Auto-install shared hook script for VS Code Copilot Chat and Claude Code
+- Auto-install shared hook script for VS Code Copilot Chat and Claude
 - Single hook entry in `~/.claude/settings.json` — works for both agents, no duplicate executions
 - Sidebar tree view with inline actions (setup, start, stop, dashboard, hook toggle)
 - Connect to existing Langfuse instances (cloud or self-hosted)
