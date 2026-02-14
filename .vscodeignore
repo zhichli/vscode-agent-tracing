@@ -8,5 +8,6 @@ esbuild.js
 **/*.map
 spec.md
 plan.md
+sprint.plan.md
 CONTRIBUTING.md
 TROUBLESHOOTING.md
