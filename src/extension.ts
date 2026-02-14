@@ -125,6 +125,35 @@ title: "Agent Tracing",
       }
     }),
 
+    // Recreate stack (destroy + rebuild from scratch — wipes all data)
+    vscode.commands.registerCommand("agentTracing.recreateStack", async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        "This will destroy the Langfuse stack and all trace data, then recreate it from scratch. This cannot be undone.",
+        { modal: true },
+        "Recreate",
+      );
+      if (confirm !== "Recreate") return;
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Agent Tracing",
+            cancellable: false,
+          },
+          async (progress) => {
+            await langfuse.recreate((msg) => progress.report({ message: msg }));
+            await hookManager.installAll();
+            provider.refresh();
+          },
+        );
+        flashStatus("Stack recreated — fresh start");
+        await langfuse.openDashboard();
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to recreate stack: ${e.message}`);
+      }
+    }),
+
     // Open dashboard in VS Code integrated browser
     vscode.commands.registerCommand("agentTracing.openDashboard", async () => {
       await langfuse.openDashboard();

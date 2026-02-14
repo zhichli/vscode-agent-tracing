@@ -69,6 +69,12 @@
         "icon": "$(primitive-square)"
       },
       {
+        "command": "agentTracing.recreateStack",
+        "title": "Agent Tracing: Recreate Stack",
+        "shortTitle": "Recreate Stack",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "agentTracing.openDashboard",
         "title": "Agent Tracing: Open Dashboard (Integrated Browser)",
         "shortTitle": "Open Dashboard",
@@ -188,6 +194,11 @@
           "command": "agentTracing.stopStack",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
           "group": "langfuse@2"
+        },
+        {
+          "command": "agentTracing.recreateStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
+          "group": "langfuse-danger@1"
         },
         {
           "command": "agentTracing.disconnect",

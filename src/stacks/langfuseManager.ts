@@ -194,6 +194,37 @@ export class LangfuseManager {
     step("All containers stopped.");
   }
 
+  /** Destroy stack + volumes and recreate from scratch. Wipes all data. */
+  async recreate(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
+
+    if (this.isExternal) {
+      throw new Error("Cannot recreate an external Langfuse instance.");
+    }
+
+    // Tear down with volumes
+    if (fs.existsSync(this.composePath)) {
+      step("docker compose down -v (removing containers + volumes)…");
+      await execStreaming(
+        `docker compose -p agent-tracing -f "${this.composePath}" down -v`,
+        {
+          timeout: 60_000,
+          onLine: (line) => {
+            this.output.info(`  ${line}`);
+            report?.(line);
+          },
+        },
+      );
+    }
+
+    // Full setup from scratch
+    step("Recreating stack from scratch…");
+    this.writeComposeFile();
+    await this.start(report);
+    await this.waitForReady(90_000, report);
+    step("Stack recreated — all data reset.");
+  }
+
   async isRunning(): Promise<boolean> {
     try {
       const res = await fetch(`${this.dashboardUrl}/api/public/health`);
