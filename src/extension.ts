@@ -109,7 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
+            title: "Agent Tracing: Stopping Langfuse…",
             cancellable: false,
           },
           async (progress) => {
@@ -151,9 +151,20 @@ export function activate(context: vscode.ExtensionContext) {
     // Enable hooks
     vscode.commands.registerCommand("agentTracing.enableHook", async () => {
       try {
-        hookManager.enableHooks();
-        provider.refresh();
-        flashStatus("Hooks enabled");
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Agent Tracing: Enabling hooks…",
+            cancellable: false,
+          },
+          async (progress) => {
+            progress.report({ message: "Installing hook script…" });
+            hookManager.enableHooks();
+            progress.report({ message: "Writing hook config to ~/.claude/settings.json…" });
+            provider.refresh();
+          },
+        );
+        flashStatus("Hooks enabled — tracing active");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
       }
@@ -162,9 +173,19 @@ export function activate(context: vscode.ExtensionContext) {
     // Disable hooks
     vscode.commands.registerCommand("agentTracing.disableHook", async () => {
       try {
-        hookManager.disableHooks();
-        provider.refresh();
-        flashStatus("Hooks disabled");
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Agent Tracing: Disabling hooks…",
+            cancellable: false,
+          },
+          async (progress) => {
+            progress.report({ message: "Removing hook entry from ~/.claude/settings.json…" });
+            hookManager.disableHooks();
+            provider.refresh();
+          },
+        );
+        flashStatus("Hooks disabled — tracing paused");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
       }
