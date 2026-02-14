@@ -96,6 +96,13 @@ title: "Agent Tracing",
           },
           async (progress) => {
             await langfuse.start((msg) => progress.report({ message: msg }));
+            progress.report({ message: "Waiting for health check…" });
+            // Poll until healthy so the tree refreshes to running state
+            const start = Date.now();
+            while (Date.now() - start < 30_000) {
+              if (await langfuse.isRunning()) break;
+              await new Promise((r) => setTimeout(r, 1000));
+            }
             provider.refresh();
           },
         );
