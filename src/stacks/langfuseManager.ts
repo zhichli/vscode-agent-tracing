@@ -27,7 +27,7 @@ export class LangfuseManager {
 
   constructor(
     private context: vscode.ExtensionContext,
-    private output: vscode.OutputChannel,
+    private output: vscode.LogOutputChannel,
   ) {
     this.composePath = path.join(
       context.globalStorageUri.fsPath,
@@ -55,7 +55,7 @@ export class LangfuseManager {
     await this.context.globalState.update("langfuse.publicKey", publicKey);
     await this.context.globalState.update("langfuse.secretKey", secretKey);
     await this.context.globalState.update("langfuse.externalHost", host);
-    this.log(`Connected to external Langfuse at ${host}`);
+    this.output.info(`Connected to external Langfuse at ${host}`);
   }
 
   /** Switch back to managed mode (clears external host). */
@@ -63,7 +63,7 @@ export class LangfuseManager {
     await this.context.globalState.update("langfuse.mode", "managed");
     await this.context.globalState.update("langfuse.externalHost", undefined);
     // Keys stay — they'll be regenerated on next managed setup if needed
-    this.log("Switched to managed mode.");
+    this.output.info("Switched to managed mode.");
   }
 
   /** Disconnect from external instance (clear mode + keys). */
@@ -71,7 +71,7 @@ export class LangfuseManager {
     await this.context.globalState.update("langfuse.mode", undefined);
     await this.context.globalState.update("langfuse.externalHost", undefined);
     // Don't clear keys — they may still be valid if user reconnects
-    this.log("Disconnected from external Langfuse.");
+    this.output.info("Disconnected from external Langfuse.");
   }
 
   // ---- public getters ----
@@ -107,7 +107,7 @@ export class LangfuseManager {
 
   /** Full first-time setup: docker check → compose write → start → wait. */
   async setup(report?: StepReporter): Promise<void> {
-    const step = (msg: string) => { this.log(msg); report?.(msg); };
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
 
     step("Checking for existing Langfuse instance…");
     if (await this.isRunning()) {
@@ -136,7 +136,7 @@ export class LangfuseManager {
   }
 
   async start(report?: StepReporter): Promise<void> {
-    const step = (msg: string) => { this.log(msg); report?.(msg); };
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
 
     if (this.isExternal) {
       throw new Error("Cannot start an external Langfuse instance from this extension.");
@@ -152,7 +152,7 @@ export class LangfuseManager {
       );
     } catch (e: any) {
       const msg = e.message ?? "";
-      this.log(`Docker compose failed: ${msg}`);
+      this.output.error(`Docker compose failed: ${msg}`);
       if (msg.includes("address pools have been fully subnetted") || msg.includes("Pool overlaps")) {
         throw new Error(
           "Docker ran out of network address space. Run 'docker network prune' in a terminal to free unused networks, then try again.",
@@ -164,7 +164,7 @@ export class LangfuseManager {
   }
 
   async stop(report?: StepReporter): Promise<void> {
-    const step = (msg: string) => { this.log(msg); report?.(msg); };
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
 
     if (this.isExternal) {
       throw new Error("Cannot stop an external Langfuse instance from this extension.");
@@ -258,7 +258,7 @@ export class LangfuseManager {
     if (action === "Copy to Clipboard") {
       await vscode.env.clipboard.writeText(formatLangfuseStackSummary(sv));
     } else if (action === "Show in Output") {
-      this.output.appendLine(formatLangfuseStackSummary(sv));
+      this.output.info(formatLangfuseStackSummary(sv));
       this.output.show(true);
     }
   }
@@ -285,25 +285,25 @@ export class LangfuseManager {
 
   private async requireDocker(): Promise<void> {
     if (!(await this.isDockerInstalled())) {
-      this.log("Docker check FAILED — docker info returned an error.");
+      this.output.error("Docker check FAILED — docker info returned an error.");
       throw new Error(
         "Docker is not installed or not running. Please install Docker and try again.",
       );
     }
-    this.log("Docker check passed.");
+    this.output.info("Docker check passed.");
   }
 
   private async ensurePythonLangfuse(): Promise<void> {
     try {
       await exec("python3 -c \"import langfuse\"", { timeout: 10_000 });
-      this.log("Python langfuse package already installed — skipping install.");
+      this.output.info("Python langfuse package already installed — skipping install.");
     } catch {
-      this.log("Python langfuse package not found — installing via pip3…");
+      this.output.info("Python langfuse package not found — installing via pip3…");
       try {
         await exec("pip3 install --user langfuse", { timeout: 120_000 });
-        this.log("Python langfuse package installed successfully.");
+        this.output.info("Python langfuse package installed successfully.");
       } catch (e: any) {
-        this.log(`WARNING: Could not install langfuse Python package: ${e.message}`);
+        this.output.warn(`Could not install langfuse Python package: ${e.message}`);
         vscode.window.showWarningMessage(
           "Could not auto-install the `langfuse` Python package. Please run: pip3 install langfuse",
         );
@@ -312,7 +312,7 @@ export class LangfuseManager {
   }
 
   private async waitForReady(timeoutMs = 90_000, report?: StepReporter): Promise<void> {
-    const step = (msg: string) => { this.log(msg); report?.(msg); };
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
     step("Waiting for Langfuse to become healthy…");
     const start = Date.now();
     let attempts = 0;
@@ -322,7 +322,7 @@ export class LangfuseManager {
         step("Langfuse health check passed — server is ready.");
         return;
       }
-      this.log(`Health check attempt ${attempts} failed, retrying in 2s…`);
+      this.output.debug(`Health check attempt ${attempts} failed, retrying in 2s…`);
       await sleep(2000);
     }
     throw new Error(
@@ -336,7 +336,7 @@ export class LangfuseManager {
 
     const yaml = this.renderCompose();
     fs.writeFileSync(this.composePath, yaml, "utf-8");
-    this.log(`Wrote compose file: ${this.composePath}`);
+    this.output.debug(`Wrote compose file: ${this.composePath}`);
   }
 
   private renderCompose(): string {
@@ -541,10 +541,6 @@ networks:
     const secret = crypto.randomBytes(32).toString("hex");
     void this.context.globalState.update(key, secret);
     return secret;
-  }
-
-  private log(msg: string) {
-    this.output.appendLine(`[Langfuse] ${msg}`);
   }
 }
 

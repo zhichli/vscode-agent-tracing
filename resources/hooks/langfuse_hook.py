@@ -34,9 +34,14 @@ def load_config() -> dict:
 
 _config = load_config()
 
-LANGFUSE_PUBLIC_KEY = os.environ.get("LANGFUSE_PUBLIC_KEY") or _config.get("public_key", "")
-LANGFUSE_SECRET_KEY = os.environ.get("LANGFUSE_SECRET_KEY") or _config.get("secret_key", "")
-LANGFUSE_HOST = os.environ.get("LANGFUSE_HOST") or _config.get("host", "http://localhost:3000")
+_env_pk = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
+_env_sk = os.environ.get("LANGFUSE_SECRET_KEY", "")
+_env_host = os.environ.get("LANGFUSE_HOST", "")
+
+LANGFUSE_PUBLIC_KEY = _env_pk or _config.get("public_key", "")
+LANGFUSE_SECRET_KEY = _env_sk or _config.get("secret_key", "")
+LANGFUSE_HOST = _env_host or _config.get("host", "http://localhost:3000")
+KEY_SOURCE = "env" if _env_pk else ("config" if _config.get("public_key") else "none")
 LOG_DIR = _config.get("log_dir", "")
 DEBUG = os.environ.get("CC_LANGFUSE_DEBUG", "").lower() == "true"
 
@@ -49,32 +54,52 @@ except ImportError:
 
 # ---------------------------------------------------------------------------
 # Logging
+#
+# Two destinations:
+#   1. Per-session:  <log_dir>/<agent>/<YYYY-MM-DD>/<sessionId>.log
+#   2. Aggregate:    <log_dir>/hook.log  (all agents, all sessions — tail -f friendly)
+# Plus stderr when CC_LANGFUSE_DEBUG=true for immediate terminal visibility.
 # ---------------------------------------------------------------------------
 
-def _log_path(agent: str, session_id: str) -> Path:
-    """Return log file path: <log_dir>/<agent>/<YYYY-MM-DD>/<sessionId>.log"""
-    if LOG_DIR:
-        base = Path(LOG_DIR)
-    else:
-        base = Path.home() / ".claude" / "state"
-    return base / agent / datetime.now().strftime("%Y-%m-%d") / f"{session_id}.log"
+def _log_base() -> Path:
+    return Path(LOG_DIR) if LOG_DIR else Path.home() / ".claude" / "state"
 
 
-def _fallback_log_path(agent: str) -> Path:
-    if LOG_DIR:
-        return Path(LOG_DIR) / agent / "hook.log"
-    return Path.home() / ".claude" / "state" / f"agent_tracing.{agent}.log"
+def _session_log_path(agent: str, session_id: str) -> Path:
+    """Per-session log: <base>/<agent>/<YYYY-MM-DD>/<sessionId>.log"""
+    return _log_base() / agent / datetime.now().strftime("%Y-%m-%d") / f"{session_id}.log"
+
+
+def _aggregate_log_path() -> Path:
+    """Single aggregate log: <base>/hook.log"""
+    return _log_base() / "hook.log"
+
+
+def _write_line(path: Path, line: str) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a") as f:
+            f.write(line)
+    except OSError:
+        pass
 
 
 def log(level: str, message: str, agent: str = "unknown", session_id: str = "") -> None:
-    if session_id:
-        p = _log_path(agent, session_id)
-    else:
-        p = _fallback_log_path(agent)
-    p.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(p, "a") as f:
-        f.write(f"{ts} [{level}] {message}\n")
+    tag = f"{agent}/{session_id}" if session_id else agent
+    line = f"{ts} [{level}] [{tag}] {message}\n"
+
+    # Always write to aggregate log
+    _write_line(_aggregate_log_path(), line)
+
+    # Also write to per-session log when we have a session
+    if session_id:
+        _write_line(_session_log_path(agent, session_id), line)
+
+    # Stderr in debug mode for immediate terminal visibility
+    if DEBUG:
+        sys.stderr.write(line)
+        sys.stderr.flush()
 
 
 def debug(message: str, agent: str = "unknown", session_id: str = "") -> None:
@@ -574,14 +599,23 @@ def main() -> None:
         hook_input = read_stdin()
         agent = detect_agent(hook_input)
         session_id = hook_input.get("sessionId", "")
-        debug(f"Hook started (agent={agent})", agent, session_id)
+
+        # Always log invocation with useful context
+        transcript = ""
+        if agent == "github-copilot-chat":
+            raw_tp = hook_input.get("transcript_path", "")
+            transcript = resolve_uri(raw_tp) if raw_tp else ""
+        log("INFO", f"Hook invoked: agent={agent} keys={KEY_SOURCE} host={LANGFUSE_HOST}", agent, session_id)
+        debug(f"stdin keys: {list(hook_input.keys())}", agent, session_id)
+        if transcript:
+            debug(f"transcript: {transcript}", agent, session_id)
 
         if os.environ.get("TRACE_TO_LANGFUSE", "").lower() != "true":
-            debug("Tracing disabled (TRACE_TO_LANGFUSE != true)", agent, session_id)
+            log("INFO", "Tracing disabled (TRACE_TO_LANGFUSE != true) — exiting", agent, session_id)
             output_and_exit()
 
         if not LANGFUSE_PUBLIC_KEY or not LANGFUSE_SECRET_KEY:
-            log("ERROR", "Langfuse API keys not set", agent, session_id)
+            log("ERROR", f"Langfuse API keys not set (source={KEY_SOURCE})", agent, session_id)
             output_and_exit()
 
         langfuse = Langfuse(public_key=LANGFUSE_PUBLIC_KEY, secret_key=LANGFUSE_SECRET_KEY, host=LANGFUSE_HOST)
@@ -593,7 +627,7 @@ def main() -> None:
 
         langfuse.flush()
         duration = (datetime.now() - script_start).total_seconds()
-        log("INFO", f"Processed {turns} turn(s) in {duration:.1f}s", agent, session_id)
+        log("INFO", f"Done: {turns} turn(s) in {duration:.1f}s", agent, session_id)
         langfuse.shutdown()
     except Exception as e:
         try:
