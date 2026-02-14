@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { LangfuseManager } from "./stacks/langfuseManager";
-import { HookManager, AgentTarget } from "./hooks/hookManager";
+import { HookManager } from "./hooks/hookManager";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
     browserCfg.update("useIntegratedBrowser", true, vscode.ConfigurationTarget.Global);
   }
 
-  const output = vscode.window.createOutputChannel("Agent Tracing");
+  const output = vscode.window.createOutputChannel("Agent Tracing", { log: true });
   const langfuse = new LangfuseManager(context, output);
   const hookManager = new HookManager(context, langfuse, output);
 
@@ -148,45 +148,18 @@ export function activate(context: vscode.ExtensionContext) {
       provider.refresh();
     }),
 
-    // Enable hook (per-agent, called from inline icon with tree item arg)
-    vscode.commands.registerCommand("agentTracing.enableHook", async (item?: { target?: string; contextValue?: string }) => {
-      const target = resolveAgentTarget(item);
-      if (!target) {
-        // Fallback: prompt user
-        const pick = await vscode.window.showQuickPick(
-          [
-            { label: "GitHub Copilot Chat", value: "vscode" as AgentTarget },
-            { label: "Claude", value: "claude" as AgentTarget },
-          ],
-          { placeHolder: "Select agent to enable tracing for" },
-        );
-        if (!pick) return;
-        hookManager.enableAgent(pick.value);
-      } else {
-        hookManager.enableAgent(target);
-      }
+    // Enable hooks
+    vscode.commands.registerCommand("agentTracing.enableHook", async () => {
+      hookManager.enableHooks();
       provider.refresh();
-      flashStatus("Hook enabled");
+      flashStatus("Hooks enabled");
     }),
 
-    // Disable hook (per-agent)
-    vscode.commands.registerCommand("agentTracing.disableHook", async (item?: { target?: string; contextValue?: string }) => {
-      const target = resolveAgentTarget(item);
-      if (!target) {
-        const pick = await vscode.window.showQuickPick(
-          [
-            { label: "GitHub Copilot Chat", value: "vscode" as AgentTarget },
-            { label: "Claude", value: "claude" as AgentTarget },
-          ],
-          { placeHolder: "Select agent to disable tracing for" },
-        );
-        if (!pick) return;
-        hookManager.disableAgent(pick.value);
-      } else {
-        hookManager.disableAgent(target);
-      }
+    // Disable hooks
+    vscode.commands.registerCommand("agentTracing.disableHook", async () => {
+      hookManager.disableHooks();
       provider.refresh();
-      flashStatus("Hook disabled");
+      flashStatus("Hooks disabled");
     }),
 
     // Connect to existing Langfuse instance (external mode)
@@ -279,22 +252,6 @@ export function activate(context: vscode.ExtensionContext) {
   provider.refresh();
 }
 
-/** Extract agent target from tree item contextValue or direct property. */
-function resolveAgentTarget(item?: { target?: string; contextValue?: string }): AgentTarget | undefined {
-  if (!item) return undefined;
-
-  // Direct target property (if tree item exposes it)
-  if (item.target === "vscode" || item.target === "claude") {
-    return item.target;
-  }
-
-  // Parse from contextValue: agent-tracing-vscode / agent-not-tracing-claude etc.
-  const cv = item.contextValue ?? "";
-  if (cv.endsWith("-vscode")) return "vscode";
-  if (cv.endsWith("-claude")) return "claude";
-  return undefined;
-}
-
 /** Silently check if hooks are installed but Langfuse isn't running, prompt once. */
 async function checkAndNudge(
   langfuse: LangfuseManager,
@@ -302,9 +259,8 @@ async function checkAndNudge(
   provider: TracingSolutionsTreeProvider,
 ): Promise<void> {
   try {
-    const statuses = await hookManager.getStatuses();
-    const anyInstalled = statuses.some((s) => s.installed);
-    if (!anyInstalled) return;
+    const installed = hookManager.isHookInstalled();
+    if (!installed) return;
 
     const running = await langfuse.isRunning();
     if (running) return;

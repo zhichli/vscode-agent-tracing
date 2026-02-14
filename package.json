@@ -140,70 +140,70 @@
           "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
           "group": "inline@2"
         },
-        {
-          "command": "agentTracing.showLoginInfo",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentTracing.stopStack",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentTracing.openDashboard",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
-          "group": "inline@3"
-        },
-        {
-          "command": "agentTracing.openDashboardExternal",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
-          "group": "inline@4"
-        },
-        {
-          "command": "agentTracing.showStackVersion",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running",
-          "group": "langfuse@1"
-        },
-        {
-          "command": "agentTracing.disconnect",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentTracing.openDashboard",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentTracing.openDashboardExternal",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-running-external",
-          "group": "inline@3"
-        },
-        {
-          "command": "agentTracing.startStack",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
-          "group": "inline@1"
-        },
-        {
-          "command": "agentTracing.connectExternal",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentTracing.showStackVersion",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped",
-          "group": "langfuse@1"
-        },
+
         {
           "command": "agentTracing.disableHook",
-          "when": "view == agentTracing.solutions && viewItem =~ /^agent-tracing-/",
+          "when": "view == agentTracing.solutions && viewItem =~ /hooks-on$/",
           "group": "inline@1"
         },
         {
           "command": "agentTracing.enableHook",
-          "when": "view == agentTracing.solutions && viewItem =~ /^agent-not-tracing-/",
+          "when": "view == agentTracing.solutions && viewItem =~ /hooks-off$/",
           "group": "inline@1"
+        },
+
+        {
+          "command": "agentTracing.stopStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentTracing.openDashboard",
+          "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
+          "group": "inline@3"
+        },
+        {
+          "command": "agentTracing.openDashboardExternal",
+          "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
+          "group": "inline@4"
+        },
+
+        {
+          "command": "agentTracing.disconnect",
+          "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running-external/",
+          "group": "inline@2"
+        },
+
+        {
+          "command": "agentTracing.startStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-stopped/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.disableHook",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-on",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentTracing.enableHook",
+          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-off",
+          "group": "inline@2"
+        },
+
+        {
+          "command": "agentTracing.showLoginInfo",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
+          "group": "langfuse@1"
+        },
+        {
+          "command": "agentTracing.showStackVersion",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
+          "group": "langfuse@2"
+        },
+        {
+          "command": "agentTracing.connectExternal",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-stopped/",
+          "group": "langfuse@3"
         }
       ]
     },

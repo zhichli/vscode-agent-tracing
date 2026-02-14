@@ -4,71 +4,54 @@ import * as fs from "fs";
 import * as os from "os";
 import { LangfuseManager } from "../stacks/langfuseManager";
 
-export type AgentTarget = "vscode" | "claude";
-
-export interface HookStatus {
-  id: string;
-  label: string;
-  target: AgentTarget;
-  installed: boolean;
-}
-
 /**
- * Manages the shared hook script and per-agent config files.
+ * Manages the shared hook script and a single hook entry in
+ * ~/.claude/settings.json that works for both VS Code and Claude agents.
  *
- * File layout (per spec):
+ * File layout:
  *   ~/.claude/hooks/langfuse_hook.py          — shared script (installed once)
  *   ~/.claude/hooks/.langfuse_config.json     — keys + log_dir
- *   {workspace}/.github/hooks/agent-tracing.json — VS Code hook config
- *   ~/.claude/settings.json                   — Claude hook entry + root env
+ *   ~/.claude/settings.json                   — single hook entry (env embedded) + root env
+ *
+ * The single entry has env embedded in the hook object (for VS Code agent)
+ * AND root-level env (for Claude agent). One execution per Stop event.
  */
 export class HookManager {
   constructor(
     private context: vscode.ExtensionContext,
     private langfuse: LangfuseManager,
-    private output: vscode.OutputChannel,
+    private output: vscode.LogOutputChannel,
   ) {}
 
   // ---- public API ----
 
-  /** Install shared script + config + enable both agents. */
+  /** Install shared script + config + enable hooks. */
   async installAll(): Promise<void> {
     this.installSharedScript();
     this.writeLangfuseConfig();
-    this.enableAgent("vscode");
-    this.enableAgent("claude");
+    this.writeHookConfig();
   }
 
-  /** Get per-agent hook statuses. */
-  async getStatuses(): Promise<HookStatus[]> {
-    return [this.vsCodeStatus(), this.claudeStatus()];
+  /** Whether the hook entry is currently installed. */
+  isHookInstalled(): boolean {
+    return this.detectHookInstalled();
   }
 
-  /** Enable a single agent's hook config (script must already exist). */
-  enableAgent(target: AgentTarget): void {
+  /** Enable hooks (script must already exist). */
+  enableHooks(): void {
     this.installSharedScript();
     this.writeLangfuseConfig();
-
-    if (target === "vscode") {
-      this.writeVSCodeConfig();
-    } else {
-      this.writeClaudeConfig();
-    }
+    this.writeHookConfig();
   }
 
-  /** Disable a single agent's hook config. Script + .langfuse_config.json stay on disk. */
-  disableAgent(target: AgentTarget): void {
-    if (target === "vscode") {
-      this.removeVSCodeConfig();
-    } else {
-      this.removeClaudeConfig();
-    }
+  /** Disable hooks. Script + .langfuse_config.json stay on disk. */
+  disableHooks(): void {
+    this.removeHookConfig();
   }
 
-  /** Remove everything (script + config + both agent configs). */
+  /** Remove everything (script + config + hook entry). */
   async removeAll(): Promise<void> {
-    this.removeVSCodeConfig();
-    this.removeClaudeConfig();
+    this.removeHookConfig();
     this.safeUnlink(this.sharedScriptPath);
     this.safeUnlink(this.langfuseConfigPath);
   }
@@ -90,7 +73,7 @@ export class HookManager {
     const src = this.resourcePath("hooks", "langfuse_hook.py");
     fs.copyFileSync(src, this.sharedScriptPath);
     fs.chmodSync(this.sharedScriptPath, 0o755);
-    this.log(`Installed shared hook script → ${this.sharedScriptPath}`);
+    this.output.info(`Installed shared hook script → ${this.sharedScriptPath}`);
   }
 
   private writeLangfuseConfig(): void {
@@ -103,112 +86,80 @@ export class HookManager {
     };
     fs.mkdirSync(path.dirname(this.langfuseConfigPath), { recursive: true });
     fs.writeFileSync(this.langfuseConfigPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
-    this.log(`Wrote .langfuse_config.json → ${this.langfuseConfigPath}`);
+    this.output.debug(`Wrote .langfuse_config.json → ${this.langfuseConfigPath}`);
   }
 
-  // ---- VS Code Copilot Chat hook ----
+  // ---- single hook entry (serves both VS Code + Claude) ----
 
-  private vsCodeConfigPath(): string | undefined {
-    const ws = this.workspaceRoot();
-    if (!ws) return undefined;
-    return path.join(ws, ".github", "hooks", "agent-tracing.json");
-  }
-
-  private writeVSCodeConfig(): void {
-    const configPath = this.vsCodeConfigPath();
-    if (!configPath) {
-      this.log("No workspace open — skipping VS Code hook config.");
-      return;
-    }
-
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-
-    const hookConfig = {
-      hooks: {
-        Stop: [
-          {
-            type: "command",
-            command: "python3 ~/.claude/hooks/langfuse_hook.py",
-            timeout: 60,
-            env: {
-              TRACE_TO_LANGFUSE: "true",
-              LANGFUSE_PUBLIC_KEY: this.langfuse.publicKey,
-              LANGFUSE_SECRET_KEY: this.langfuse.secretKey,
-              LANGFUSE_HOST: this.langfuse.dashboardUrl,
-            },
-          },
-        ],
-      },
-    };
-    fs.writeFileSync(configPath, JSON.stringify(hookConfig, null, 2) + "\n", "utf-8");
-    this.log(`Wrote VS Code hook config → ${configPath}`);
-  }
-
-  private removeVSCodeConfig(): void {
-    const configPath = this.vsCodeConfigPath();
-    if (configPath) {
-      this.safeUnlink(configPath);
-      this.log("Removed VS Code hook config (agent-tracing.json).");
-    }
-  }
-
-  private vsCodeStatus(): HookStatus {
-    const configPath = this.vsCodeConfigPath();
-    return {
-      id: "agent-vscode",
-      label: "GitHub Copilot Chat",
-      target: "vscode",
-      installed: configPath ? fs.existsSync(configPath) : false,
-    };
-  }
-
-  // ---- Claude Code hook ----
-
-  private get claudeSettingsPath(): string {
+  private get settingsPath(): string {
     return path.join(os.homedir(), ".claude", "settings.json");
   }
 
-  private writeClaudeConfig(): void {
-    const settingsPath = this.claudeSettingsPath;
-    const settings = this.readJsonSafe(settingsPath);
+  private static readonly HOOK_CMD = "python3 ~/.claude/hooks/langfuse_hook.py";
 
-    if (!settings.hooks) settings.hooks = {};
+  /** Write / update the single hook entry + root env. */
+  private writeHookConfig(): void {
+    const settings = this.readJsonSafe(this.settingsPath);
+
+    if (!settings.hooks || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) {
+      settings.hooks = {};
+    }
     if (!Array.isArray(settings.hooks.Stop)) settings.hooks.Stop = [];
 
-    const cmd = "python3 ~/.claude/hooks/langfuse_hook.py";
-    const alreadyRegistered = settings.hooks.Stop.some(
+    const cmd = HookManager.HOOK_CMD;
+    const envVars = {
+      TRACE_TO_LANGFUSE: "true",
+      LANGFUSE_PUBLIC_KEY: this.langfuse.publicKey,
+      LANGFUSE_SECRET_KEY: this.langfuse.secretKey,
+      LANGFUSE_HOST: this.langfuse.dashboardUrl,
+    };
+
+    // Find existing entry
+    const existing = settings.hooks.Stop.find(
       (h: any) => {
         const entries = h.hooks ?? [h];
         return entries.some((inner: any) => inner.command === cmd);
       },
     );
 
-    if (!alreadyRegistered) {
+    if (existing) {
+      // Update env on inner hook object
+      const entries = existing.hooks ?? [existing];
+      for (const inner of entries) {
+        if (inner.command === cmd) {
+          inner.env = { ...envVars };
+        }
+      }
+    } else {
       settings.hooks.Stop.push({
-        type: "command",
-        command: cmd,
+        matcher: "*",
+        hooks: [
+          {
+            type: "command",
+            command: cmd,
+            env: { ...envVars },
+          },
+        ],
       });
     }
 
-    // Merge env vars into root env (per spec)
+    // Root env for Claude agent
     if (!settings.env) settings.env = {};
-    settings.env.TRACE_TO_LANGFUSE = "true";
-    settings.env.LANGFUSE_PUBLIC_KEY = this.langfuse.publicKey;
-    settings.env.LANGFUSE_SECRET_KEY = this.langfuse.secretKey;
-    settings.env.LANGFUSE_HOST = this.langfuse.dashboardUrl;
+    Object.assign(settings.env, envVars);
 
-    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-    this.log(`Wrote Claude hook config → ${settingsPath}`);
+    fs.mkdirSync(path.dirname(this.settingsPath), { recursive: true });
+    fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+    this.output.info(`Wrote hook config → ${this.settingsPath}`);
   }
 
-  private removeClaudeConfig(): void {
-    const settingsPath = this.claudeSettingsPath;
-    if (!fs.existsSync(settingsPath)) return;
+  /** Remove hook entry + root env keys. */
+  private removeHookConfig(): void {
+    if (!fs.existsSync(this.settingsPath)) return;
 
     try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-      if (settings.hooks?.Stop) {
+      const settings = JSON.parse(fs.readFileSync(this.settingsPath, "utf-8"));
+
+      if (Array.isArray(settings.hooks?.Stop)) {
         settings.hooks.Stop = settings.hooks.Stop.filter(
           (h: any) => {
             const entries = h.hooks ?? [h];
@@ -217,8 +168,18 @@ export class HookManager {
             );
           },
         );
+        // Clean up empty Stop array
+        if (settings.hooks.Stop.length === 0) {
+          delete settings.hooks.Stop;
+        }
       }
-      if (settings.env) {
+
+      // Clean up empty hooks object
+      if (settings.hooks && typeof settings.hooks === "object" && Object.keys(settings.hooks).length === 0) {
+        delete settings.hooks;
+      }
+
+      if (settings.env && typeof settings.env === "object") {
         delete settings.env.TRACE_TO_LANGFUSE;
         delete settings.env.LANGFUSE_PUBLIC_KEY;
         delete settings.env.LANGFUSE_SECRET_KEY;
@@ -227,45 +188,33 @@ export class HookManager {
           delete settings.env;
         }
       }
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-      this.log("Removed Claude hook entry from settings.json.");
+
+      fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+      this.output.info("Removed hook entry from settings.json.");
     } catch {
       // ignore corrupt file
     }
   }
 
-  private claudeStatus(): HookStatus {
-    const settingsPath = this.claudeSettingsPath;
-    let installed = false;
-    if (fs.existsSync(settingsPath)) {
-      try {
-        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-        installed = (settings.hooks?.Stop ?? []).some(
-          (h: any) => {
-            const entries = h.hooks ?? [h];
-            return entries.some(
-              (inner: any) => inner.command?.includes("langfuse_hook.py"),
-            );
-          },
-        );
-      } catch {
-        // corrupt settings
-      }
+  /** Check if our hook entry exists in settings.json. */
+  private detectHookInstalled(): boolean {
+    if (!fs.existsSync(this.settingsPath)) return false;
+    try {
+      const settings = JSON.parse(fs.readFileSync(this.settingsPath, "utf-8"));
+      return (settings.hooks?.Stop ?? []).some(
+        (h: any) => {
+          const entries = h.hooks ?? [h];
+          return entries.some(
+            (inner: any) => inner.command?.includes("langfuse_hook.py"),
+          );
+        },
+      );
+    } catch {
+      return false;
     }
-
-    return {
-      id: "agent-claude",
-      label: "Claude",
-      target: "claude",
-      installed,
-    };
   }
 
   // ---- helpers ----
-
-  private workspaceRoot(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  }
 
   private resourcePath(...segments: string[]): string {
     return path.join(this.context.extensionPath, "resources", ...segments);
@@ -286,9 +235,5 @@ export class HookManager {
     } catch {
       // ignore
     }
-  }
-
-  private log(msg: string) {
-    this.output.appendLine(`[Hooks] ${msg}`);
   }
 }
