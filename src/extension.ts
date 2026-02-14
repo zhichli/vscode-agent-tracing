@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import * as path from "path";
+import * as os from "os";
 import { LangfuseManager } from "./stacks/langfuseManager";
 import { HookManager } from "./hooks/hookManager";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
@@ -164,7 +166,18 @@ title: "Agent Tracing",
             provider.refresh();
           },
         );
-        flashStatus("Hooks enabled — tracing active");
+        const action = await vscode.window.showInformationMessage(
+          "Hooks enabled — tracing active",
+          "Open settings.json",
+          "Open Hook Script",
+        );
+        if (action === "Open settings.json") {
+          const settingsUri = vscode.Uri.file(path.join(os.homedir(), ".claude", "settings.json"));
+          await vscode.window.showTextDocument(settingsUri);
+        } else if (action === "Open Hook Script") {
+          const scriptUri = vscode.Uri.file(path.join(os.homedir(), ".claude", "hooks", "langfuse_hook.py"));
+          await vscode.window.showTextDocument(scriptUri);
+        }
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
       }
