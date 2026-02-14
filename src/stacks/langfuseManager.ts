@@ -343,6 +343,7 @@ export class LangfuseManager {
     const pk = this.publicKey;
     const sk = this.secretKey;
     const port = this.port;
+    const minioPort = port + 6090; // e.g. 3000 → 9090, 3001 → 9091
     const secret = this.getOrCreateSecret("nextauth.secret");
     const salt = this.getOrCreateSecret("salt");
     const encryptionKey = this.getOrCreateSecret("encryption.key");
@@ -388,7 +389,7 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
       LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:${minioPort}
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
@@ -419,8 +420,8 @@ services:
       <<: *langfuse-worker-env
       NEXTAUTH_SECRET: "${secret}"
       # Auto-seed org, project, and user so hooks work with zero manual setup
-      LANGFUSE_INIT_ORG_ID: agent-tracing-org
-      LANGFUSE_INIT_ORG_NAME: Agent Tracing
+      LANGFUSE_INIT_ORG_ID: agent-tracing-local
+      LANGFUSE_INIT_ORG_NAME: Local
       LANGFUSE_INIT_PROJECT_ID: agent-tracing-default
       LANGFUSE_INIT_PROJECT_NAME: Agent Traces
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${pk}"
@@ -464,7 +465,7 @@ services:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: miniosecret
     ports:
-      - "9090:9000"
+      - "${minioPort}:9000"
     volumes:
       - agent-tracing-minio-data:/data
     healthcheck:
