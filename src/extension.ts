@@ -127,6 +127,7 @@ title: "Agent Tracing",
           },
         );
         flashStatus("Langfuse stopped");
+        provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to stop Langfuse: ${e.message}`);
       }
@@ -155,6 +156,7 @@ title: "Agent Tracing",
           },
         );
         flashStatus("Stack recreated — trace data preserved");
+        provider.refresh();
         await langfuse.openDashboard();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to recreate stack: ${e.message}`);
@@ -183,6 +185,7 @@ title: "Agent Tracing",
           },
         );
         flashStatus("Stack deleted");
+        provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to purge stack: ${e.message}`);
       }
@@ -262,6 +265,7 @@ title: "Agent Tracing",
           },
         );
         flashStatus("Hooks disabled — tracing paused");
+        provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
       }
