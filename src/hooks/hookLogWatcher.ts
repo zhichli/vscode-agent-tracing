@@ -17,6 +17,7 @@ import * as path from "path";
 export class HookLogWatcher implements vscode.Disposable {
   private static readonly ERROR_TOAST_COOLDOWN_MS = 5 * 60 * 1000; // 5 min
   private static readonly POLL_INTERVAL_MS = 2_000;
+  private static readonly MAX_LOG_BYTES = 5 * 1024 * 1024; // 5 MB
 
   private lastSize = 0;
   private lastErrorToast = 0;
@@ -65,8 +66,11 @@ export class HookLogWatcher implements vscode.Disposable {
   // ---- internal ----
 
   private onFileChange(curr: fs.Stats): void {
+    // Rotate if the file has grown past the limit (before reading new bytes)
+    this.rotateIfNeeded(curr);
+
     if (curr.size <= this.lastSize) {
-      // File was truncated or unchanged
+      // File was truncated, rotated, or unchanged
       this.lastSize = curr.size;
       return;
     }
@@ -82,14 +86,22 @@ export class HookLogWatcher implements vscode.Disposable {
       const lines = newText.split("\n").filter((l) => l.trim());
 
       for (const line of lines) {
+        // Parse hook.log line: "2026-02-14 23:52:44 [LEVEL] [agent/session] message"
+        // Keep the hook timestamp (may differ from relay time) but strip the
+        // level tag since the output channel already provides its own.
+        const match = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+\[\w+\]\s*\[([^\]]*)\]\s*(.*)/);
+        const display = match
+          ? `[Hook ${match[1].split(" ")[1]}] [${match[2]}] ${match[3]}`
+          : `[Hook] ${line}`;
+
         // Route to output channel at the appropriate level
         if (line.includes("[ERROR]")) {
-          this.output.error(`[Hook] ${line}`);
+          this.output.error(display);
           this.maybeShowErrorToast(line);
         } else if (line.includes("[DEBUG]")) {
-          this.output.debug(`[Hook] ${line}`);
+          this.output.debug(display);
         } else {
-          this.output.info(`[Hook] ${line}`);
+          this.output.info(display);
         }
       }
 
@@ -119,5 +131,18 @@ export class HookLogWatcher implements vscode.Disposable {
           vscode.commands.executeCommand("agentTracing.showHookLog");
         }
       });
+  }
+
+  /** Rotate hook.log → hook.log.1 when it exceeds MAX_LOG_BYTES. */
+  private rotateIfNeeded(curr: fs.Stats): void {
+    if (curr.size < HookLogWatcher.MAX_LOG_BYTES) return;
+    try {
+      const backup = this.logPath + ".1";
+      if (fs.existsSync(backup)) fs.unlinkSync(backup);
+      fs.renameSync(this.logPath, backup);
+      this.lastSize = 0;
+    } catch {
+      // best-effort rotation
+    }
   }
 }

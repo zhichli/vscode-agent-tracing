@@ -60,47 +60,37 @@ except ImportError:
 
 # ---------------------------------------------------------------------------
 # Logging
+# Logging
 #
-# Two destinations:
-#   1. Per-session:  <log_dir>/<agent>/<YYYY-MM-DD>/<sessionId>.log
-#   2. Aggregate:    <log_dir>/hook.log  (all agents, all sessions — tail -f friendly)
-# Plus stderr when CC_LANGFUSE_DEBUG=true for immediate terminal visibility.
+# Single destination: <log_dir>/hook.log (append-only, rotation managed by
+# the VS Code extension). Plus stderr when CC_LANGFUSE_DEBUG=true.
 # ---------------------------------------------------------------------------
 
 def _log_base() -> Path:
     return Path(LOG_DIR) if LOG_DIR else Path.home() / ".claude" / "state"
 
 
-def _session_log_path(agent: str, session_id: str) -> Path:
-    """Per-session log: <base>/<agent>/<YYYY-MM-DD>/<sessionId>.log"""
-    return _log_base() / agent / datetime.now().strftime("%Y-%m-%d") / f"{session_id}.log"
-
-
-def _aggregate_log_path() -> Path:
-    """Single aggregate log: <base>/hook.log"""
+def _log_path() -> Path:
     return _log_base() / "hook.log"
 
 
-def _write_line(path: Path, line: str) -> None:
+def _write_line(line: str) -> None:
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a") as f:
+        p = _log_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a") as f:
             f.write(line)
     except OSError:
         pass
 
 
 def log(level: str, message: str, agent: str = "unknown", session_id: str = "") -> None:
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
+    ts = now.strftime("%Y-%m-%d %H:%M:%S") + f".{now.microsecond // 1000:03d}"
     tag = f"{agent}/{session_id}" if session_id else agent
     line = f"{ts} [{level}] [{tag}] {message}\n"
 
-    # Always write to aggregate log
-    _write_line(_aggregate_log_path(), line)
-
-    # Also write to per-session log when we have a session
-    if session_id:
-        _write_line(_session_log_path(agent, session_id), line)
+    _write_line(line)
 
     # Stderr in debug mode for immediate terminal visibility
     if DEBUG:
