@@ -288,14 +288,10 @@ def create_vscode_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
 
     with langfuse.start_as_current_span(
         name=f"Turn {turn_num}",
+        session_id=session_id,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
-        langfuse.update_current_trace(
-            session_id=session_id,
-            input={"role": "user", "content": user_text},
-            metadata=metadata,
-        )
         gen_output: dict[str, Any] = {"role": "assistant", "content": output_text}
         if reasoning:
             gen_output["reasoning"] = reasoning[:2000]
@@ -509,14 +505,10 @@ def create_claude_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
 
     with langfuse.start_as_current_span(
         name=f"Turn {turn_num}",
+        session_id=session_id,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
-        langfuse.update_current_trace(
-            session_id=session_id,
-            input={"role": "user", "content": user_text},
-            metadata=metadata,
-        )
         model = "claude-sonnet-4-20250514"
         if turn["assistant_messages"]:
             first_am = turn["assistant_messages"][0]
