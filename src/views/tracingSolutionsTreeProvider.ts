@@ -133,7 +133,11 @@ class LangfuseNode extends vscode.TreeItem {
         break;
     }
 
-    this.tooltip = `Langfuse (${state})${hooksOn ? " — hooks enabled" : ""}\n${dashboardUrl}`;
+    // Tooltip: show URL only when running
+    const showUrl = state === "running" || state === "running-external";
+    this.tooltip = showUrl
+      ? `Langfuse (${state})${hooksOn ? " — hooks enabled" : ""}\n${dashboardUrl}`
+      : `Langfuse (${state})${hooksOn ? " — hooks enabled" : ""}`;
     this.id = "langfuse-root";
   }
 }

@@ -109,14 +109,6 @@ export class LangfuseManager {
   async setup(report?: StepReporter): Promise<void> {
     const step = (msg: string) => { this.output.info(msg); report?.(msg); };
 
-    step("Checking for existing Langfuse instance…");
-    if (await this.isRunning()) {
-      throw new Error(
-        "Langfuse is already running on " + this.dashboardUrl +
-        ". Use 'Connect to Existing' to connect to it, or change the port in settings.",
-      );
-    }
-
     step("Switching to managed mode…");
     await this.switchToManaged();
 
@@ -259,6 +251,26 @@ export class LangfuseManager {
       return res.ok;
     } catch {
       return false;
+    }
+  }
+
+  /** Check if the running Langfuse is our managed stack (by container labels). */
+  async isOurManagedStack(): Promise<boolean> {
+    try {
+      const output = await exec(
+        'docker ps --filter "label=com.agent-tracing.managed=true" --format "{{.Names}}"',
+        { timeout: 10_000 },
+      );
+      return output.includes("agent-tracing-langfuse-web");
+    } catch {
+      return false;
+    }
+  }
+
+  /** Ensure the compose file exists on disk (write if missing). */
+  ensureComposeFile(): void {
+    if (!fs.existsSync(this.composePath)) {
+      this.writeComposeFile();
     }
   }
 

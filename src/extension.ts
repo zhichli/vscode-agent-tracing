@@ -41,30 +41,49 @@ export function activate(context: vscode.ExtensionContext) {
   // --- Commands ---
 
   context.subscriptions.push(
-    // Full Setup: hooks → pip → docker → start → health → open dashboard
+    // Setup: hooks → pip → docker → start → health → open dashboard
     vscode.commands.registerCommand("agentTracing.setup", async () => {
-      // If Langfuse is already running, offer to connect instead
-      if (await langfuse.isRunning()) {
-        const action = await vscode.window.showInformationMessage(
-          `Langfuse is already running at ${langfuse.dashboardUrl}. Would you like to connect to this existing instance instead?`,
-          "Connect to Existing",
-          "Cancel",
-        );
-        if (action === "Connect to Existing") {
-          await vscode.commands.executeCommand("agentTracing.connectExternal");
-        }
-        return;
-      }
-
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-title: "Agent Tracing",
+          title: "Agent Tracing",
           cancellable: false,
         },
         async (progress) => {
           const report = (message: string) => progress.report({ message });
           try {
+            // Check if something is already running on the Langfuse port
+            if (await langfuse.isRunning()) {
+              const isOurStack = await langfuse.isOurManagedStack();
+              if (isOurStack) {
+                const action = await vscode.window.showInformationMessage(
+                  `A Langfuse stack managed by this extension is already running at ${langfuse.dashboardUrl}.`,
+                  { modal: true, detail: "You can connect to it and start tracing, or recreate it from scratch (trace data will be preserved)." },
+                  "Connect",
+                  "Recreate",
+                );
+                if (action === "Connect") {
+                  report("Connecting to existing stack…");
+                  await langfuse.switchToManaged();
+                  langfuse.ensureComposeFile();
+                  await hookManager.installAll();
+                  provider.refresh();
+                  await langfuse.openDashboard();
+                  flashStatus("Connected to existing stack");
+                  return;
+                } else if (action === "Recreate") {
+                  report("Recreating stack…");
+                  await langfuse.recreate(report);
+                  await hookManager.installAll();
+                  provider.refresh();
+                  await langfuse.openDashboard();
+                  flashStatus("Stack recreated");
+                  return;
+                }
+                return;
+              }
+            }
+
             await langfuse.setup(report);
 
             report("Installing hooks…");

@@ -53,8 +53,8 @@
       {
         "command": "agentTracing.setup",
         "category": "Agent Tracing",
-        "title": "Full Setup",
-        "shortTitle": "Setup — install hooks, start Langfuse, open dashboard",
+        "title": "Start",
+        "shortTitle": "Start Langfuse and enable tracing",
         "icon": "$(play)"
       },
       {
@@ -164,19 +164,9 @@
           "group": "inline@1"
         },
         {
-          "command": "agentTracing.connectExternal",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-not-configured",
-          "group": "inline@2"
-        },
-        {
           "command": "agentTracing.setup",
           "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
           "group": "inline@1"
-        },
-        {
-          "command": "agentTracing.connectExternal",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
-          "group": "inline@2"
         },
 
         {
