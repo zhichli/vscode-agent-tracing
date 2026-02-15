@@ -109,10 +109,6 @@ class LangfuseNode extends vscode.TreeItem {
           ? { light: runningIcon, dark: runningIcon }
           : warningIcon;
         this.contextValue = hooksOn ? "langfuse-running-hooks-on" : "langfuse-running-hooks-off";
-        this.command = {
-          command: "agentTracing.openDashboard",
-          title: "Open Dashboard",
-        };
         break;
 
       case "running-external":
@@ -121,10 +117,6 @@ class LangfuseNode extends vscode.TreeItem {
           ? { light: runningIcon, dark: runningIcon }
           : warningIcon;
         this.contextValue = hooksOn ? "langfuse-running-external-hooks-on" : "langfuse-running-external-hooks-off";
-        this.command = {
-          command: "agentTracing.openDashboard",
-          title: "Open Dashboard",
-        };
         break;
 
       case "stopped":
