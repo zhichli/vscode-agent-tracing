@@ -80,9 +80,7 @@ class LangfuseNode extends vscode.TreeItem {
 
     switch (state) {
       case "running":
-        this.description = hooksOn
-          ? `Tracing — ${dashboardUrl}`
-          : `Running — ${dashboardUrl}`;
+        this.description = dashboardUrl;
         this.iconPath = new vscode.ThemeIcon(
           "pass-filled",
           new vscode.ThemeColor("testing.iconPassed"),
@@ -95,9 +93,7 @@ class LangfuseNode extends vscode.TreeItem {
         break;
 
       case "running-external":
-        this.description = hooksOn
-          ? `Tracing — ${dashboardUrl}`
-          : `External — ${dashboardUrl}`;
+        this.description = dashboardUrl;
         this.iconPath = new vscode.ThemeIcon(
           "pass-filled",
           new vscode.ThemeColor("testing.iconPassed"),
