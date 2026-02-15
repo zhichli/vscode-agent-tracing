@@ -86,6 +86,8 @@ class LangfuseNode extends vscode.TreeItem {
           new vscode.ThemeColor("testing.iconPassed"),
         );
         this.contextValue = hooksOn ? "langfuse-running-hooks-on" : "langfuse-running-hooks-off";
+        // resourceUri prevents VS Code selection styling from dimming the green icon
+        this.resourceUri = vscode.Uri.parse("langfuse:running");
         this.command = {
           command: "agentTracing.openDashboard",
           title: "Open Dashboard",
@@ -99,6 +101,7 @@ class LangfuseNode extends vscode.TreeItem {
           new vscode.ThemeColor("testing.iconPassed"),
         );
         this.contextValue = hooksOn ? "langfuse-running-external-hooks-on" : "langfuse-running-external-hooks-off";
+        this.resourceUri = vscode.Uri.parse("langfuse:external");
         this.command = {
           command: "agentTracing.openDashboard",
           title: "Open Dashboard",

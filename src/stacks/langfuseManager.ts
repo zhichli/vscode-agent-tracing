@@ -283,13 +283,17 @@ export class LangfuseManager {
     }
   }
 
+  /** URL pointing directly to the traces view. */
+  get tracesUrl(): string {
+    return `${this.dashboardUrl}/project/agent-tracing-default/traces`;
+  }
+
   async openDashboard(): Promise<void> {
-    // simpleBrowser.api.open reuses an existing Simple Browser tab when
-    // the same base URL is already open — no duplicate tabs.
-    // We always navigate to the root URL to avoid stacking sub-paths.
+    // Open the traces page directly. simpleBrowser.api.open reuses an
+    // existing Simple Browser tab when called again.
     await vscode.commands.executeCommand(
       "simpleBrowser.api.open",
-      vscode.Uri.parse(this.dashboardUrl),
+      vscode.Uri.parse(this.tracesUrl),
       {
         viewColumn: vscode.ViewColumn.Active,
         preserveFocus: false,
