@@ -44,9 +44,11 @@ export class HookManager {
     this.writeHookConfig();
   }
 
-  /** Disable hooks. Script + .langfuse_config.json stay on disk. */
+  /** Disable hooks. Removes script + config + settings entry so next enable gets a fresh copy. */
   disableHooks(): void {
     this.removeHookConfig();
+    this.safeUnlink(this.sharedScriptPath);
+    this.safeUnlink(this.langfuseConfigPath);
   }
 
   /** Remove everything (script + config + hook entry). */
