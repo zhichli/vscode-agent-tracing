@@ -17,7 +17,11 @@ export function activate(context: vscode.ExtensionContext) {
   const langfuse = new LangfuseManager(context, output);
   const hookManager = new HookManager(context, langfuse, output);
 
-  const provider = new TracingSolutionsTreeProvider(langfuse, hookManager);
+  const provider = new TracingSolutionsTreeProvider(
+    langfuse,
+    hookManager,
+    context.extensionUri,
+  );
 
   // Status bar item for transient feedback
   const statusItem = vscode.window.createStatusBarItem(
@@ -46,7 +50,6 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Agent Tracing",
           cancellable: false,
         },
         async (progress) => {
@@ -97,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
             flashStatus("Setup complete");
           } catch (e: any) {
             vscode.window.showErrorMessage(
-              `Agent Tracing setup failed: ${e.message}`,
+              `Setup failed: ${e.message}`,
             );
           }
         },
@@ -110,11 +113,12 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
             await langfuse.start((msg) => progress.report({ message: msg }));
+            progress.report({ message: "Enabling hooks…" });
+            await hookManager.installAll();
             progress.report({ message: "Waiting for health check…" });
             // Poll until healthy so the tree refreshes to running state
             const start = Date.now();
@@ -137,11 +141,12 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
             await langfuse.stop((msg) => progress.report({ message: msg }));
+            progress.report({ message: "Disabling hooks…" });
+            hookManager.disableHooks();
             provider.refresh();
           },
         );
@@ -165,7 +170,6 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
@@ -195,11 +199,12 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
             await langfuse.purge((msg) => progress.report({ message: msg }));
+            progress.report({ message: "Disabling hooks…" });
+            hookManager.disableHooks();
             provider.refresh();
           },
         );
@@ -241,7 +246,6 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
@@ -274,7 +278,6 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Agent Tracing",
             cancellable: false,
           },
           async (progress) => {
@@ -283,7 +286,9 @@ export function activate(context: vscode.ExtensionContext) {
             provider.refresh();
           },
         );
-        flashStatus("Hooks disabled — tracing paused");
+        void vscode.window.showWarningMessage(
+          "Hooks are disabled — traces will not flow until you enable hooks again.",
+        );
         provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
@@ -376,7 +381,13 @@ export function activate(context: vscode.ExtensionContext) {
     .getConfiguration("agentTracing.langfuse")
     .get<boolean>("autoStart", false);
   if (autoStart) {
-    langfuse.start().then(() => provider.refresh()).catch(() => {});
+    langfuse
+      .start()
+      .then(async () => {
+        await hookManager.installAll();
+        provider.refresh();
+      })
+      .catch(() => {});
   } else {
     checkAndNudge(context, langfuse, hookManager, provider);
   }
@@ -407,7 +418,7 @@ async function checkAndNudge(
     if (!dockerOk) return;
 
     const action = await vscode.window.showInformationMessage(
-      "Agent Tracing hooks are active but Langfuse is not running. Traces won't be recorded.",
+      "Hooks are active but Langfuse is not running. Traces won't be recorded.",
       "Start Langfuse",
       "Dismiss",
     );
@@ -416,11 +427,12 @@ async function checkAndNudge(
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: "Agent Tracing",
           cancellable: false,
         },
         async (progress) => {
           await langfuse.start((msg) => progress.report({ message: msg }));
+          progress.report({ message: "Enabling hooks…" });
+          await hookManager.installAll();
           provider.refresh();
         },
       );

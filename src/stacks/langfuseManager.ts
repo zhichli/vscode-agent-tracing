@@ -289,8 +289,7 @@ export class LangfuseManager {
   }
 
   async openDashboard(): Promise<void> {
-    // Open the traces page directly. simpleBrowser.api.open reuses an
-    // existing Simple Browser tab when called again.
+    // Open traces page directly in the VS Code browser pane.
     await vscode.commands.executeCommand(
       "simpleBrowser.api.open",
       vscode.Uri.parse(this.tracesUrl),
@@ -311,6 +310,7 @@ export class LangfuseManager {
       await vscode.window.showInformationMessage(
         "This is an external Langfuse instance — login credentials are managed by you.",
         { modal: true },
+        "Cancel",
       );
       return;
     }
@@ -319,6 +319,7 @@ export class LangfuseManager {
       { modal: true },
       "Copy Password",
       "Copy Email",
+      "Cancel",
     );
     if (action === "Copy Email") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
@@ -340,6 +341,7 @@ export class LangfuseManager {
       { modal: true, detail },
       "Copy to Clipboard",
       "Show in Output",
+      "Cancel",
     );
 
     if (action === "Copy to Clipboard") {

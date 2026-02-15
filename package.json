@@ -60,7 +60,7 @@
       {
         "command": "agentTracing.startStack",
         "category": "Agent Tracing",
-        "title": "Start Stack",
+        "title": "Start",
         "shortTitle": "Start Langfuse stack (docker compose up)",
         "icon": "$(play)"
       },
@@ -170,6 +170,11 @@
         },
 
         {
+          "command": "agentTracing.enableHook",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-off$/",
+          "group": "inline@0"
+        },
+        {
           "command": "agentTracing.openDashboard",
           "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
           "group": "inline@1"
@@ -177,12 +182,12 @@
         {
           "command": "agentTracing.disableHook",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-on$/",
-          "group": "inline@2"
+          "group": "langfuse@5"
         },
         {
           "command": "agentTracing.enableHook",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-off$/",
-          "group": "inline@2"
+          "group": "langfuse@5"
         },
         {
           "command": "agentTracing.stopStack",
@@ -234,18 +239,14 @@
         {
           "command": "agentTracing.disableHook",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-on",
-          "group": "inline@2"
+          "group": "langfuse@5"
         },
         {
           "command": "agentTracing.enableHook",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-off",
-          "group": "inline@2"
-        },
-        {
-          "command": "agentTracing.connectExternal",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-stopped/",
-          "group": "langfuse@3"
+          "group": "langfuse@5"
         }
+
       ]
     },
     "configuration": {

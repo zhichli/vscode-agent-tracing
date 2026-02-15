@@ -29,6 +29,7 @@ export class TracingSolutionsTreeProvider
   constructor(
     private langfuse: LangfuseManager,
     private hookManager: HookManager,
+    private extensionUri: vscode.Uri,
   ) {}
 
   refresh(): void {
@@ -41,7 +42,14 @@ export class TracingSolutionsTreeProvider
 
   async getChildren(element?: LangfuseNode): Promise<LangfuseNode[]> {
     if (!element) {
-      return [new LangfuseNode(this.langfuseState, this.hooksInstalled, this.langfuse.dashboardUrl)];
+      return [
+        new LangfuseNode(
+          this.langfuseState,
+          this.hooksInstalled,
+          this.langfuse.dashboardUrl,
+          this.extensionUri,
+        ),
+      ];
     }
     return [];
   }
@@ -75,19 +83,32 @@ export class TracingSolutionsTreeProvider
 // ---------------------------------------------------------------------------
 
 class LangfuseNode extends vscode.TreeItem {
-  constructor(state: LangfuseState, hooksOn: boolean, dashboardUrl: string) {
+  constructor(
+    state: LangfuseState,
+    hooksOn: boolean,
+    dashboardUrl: string,
+    extensionUri: vscode.Uri,
+  ) {
     super("Langfuse", vscode.TreeItemCollapsibleState.None);
+
+    const runningIcon = vscode.Uri.joinPath(
+      extensionUri,
+      "resources",
+      "icons",
+      "langfuse-running.svg",
+    );
+    const warningIcon = new vscode.ThemeIcon(
+      "warning",
+      new vscode.ThemeColor("problemsWarningIcon.foreground"),
+    );
 
     switch (state) {
       case "running":
-        this.description = dashboardUrl;
-        this.iconPath = new vscode.ThemeIcon(
-          "pass-filled",
-          new vscode.ThemeColor("testing.iconPassed"),
-        );
+        this.description = hooksOn ? dashboardUrl : `${dashboardUrl} (hooks disabled)`;
+        this.iconPath = hooksOn
+          ? { light: runningIcon, dark: runningIcon }
+          : warningIcon;
         this.contextValue = hooksOn ? "langfuse-running-hooks-on" : "langfuse-running-hooks-off";
-        // resourceUri prevents VS Code selection styling from dimming the green icon
-        this.resourceUri = vscode.Uri.parse("langfuse:running");
         this.command = {
           command: "agentTracing.openDashboard",
           title: "Open Dashboard",
@@ -95,13 +116,11 @@ class LangfuseNode extends vscode.TreeItem {
         break;
 
       case "running-external":
-        this.description = dashboardUrl;
-        this.iconPath = new vscode.ThemeIcon(
-          "pass-filled",
-          new vscode.ThemeColor("testing.iconPassed"),
-        );
+        this.description = hooksOn ? dashboardUrl : `${dashboardUrl} (hooks disabled)`;
+        this.iconPath = hooksOn
+          ? { light: runningIcon, dark: runningIcon }
+          : warningIcon;
         this.contextValue = hooksOn ? "langfuse-running-external-hooks-on" : "langfuse-running-external-hooks-off";
-        this.resourceUri = vscode.Uri.parse("langfuse:external");
         this.command = {
           command: "agentTracing.openDashboard",
           title: "Open Dashboard",
