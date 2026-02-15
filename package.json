@@ -147,6 +147,13 @@
         "title": "Stack Info",
         "shortTitle": "Show pinned Docker image versions",
         "icon": "$(info)"
+      },
+      {
+        "command": "agentTracing.showHookLog",
+        "category": "Agent Tracing",
+        "title": "Show Hook Log",
+        "shortTitle": "Open the hook script log for debugging",
+        "icon": "$(output)"
       }
     ],
     "menus": {
@@ -219,6 +226,11 @@
           "command": "agentTracing.showStackVersion",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
           "group": "langfuse@4"
+        },
+        {
+          "command": "agentTracing.showHookLog",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running|stopped)/",
+          "group": "langfuse@6"
         },
         {
           "command": "agentTracing.recreateStack",

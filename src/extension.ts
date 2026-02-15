@@ -363,6 +363,25 @@ export function activate(context: vscode.ExtensionContext) {
       await langfuse.openDashboard();
     }),
 
+    // Show hook log
+    vscode.commands.registerCommand("agentTracing.showHookLog", async () => {
+      const logPath = hookManager.hookLogPath;
+      const logUri = vscode.Uri.file(logPath);
+      try {
+        await vscode.workspace.fs.stat(logUri);
+        const doc = await vscode.workspace.openTextDocument(logUri);
+        const editor = await vscode.window.showTextDocument(doc, { preview: false });
+        // Scroll to the end
+        const lastLine = doc.lineCount - 1;
+        const range = new vscode.Range(lastLine, 0, lastLine, 0);
+        editor.revealRange(range, vscode.TextEditorRevealType.Default);
+      } catch {
+        vscode.window.showWarningMessage(
+          "No hook log found yet. Traces are logged after the first hook invocation.",
+        );
+      }
+    }),
+
     // Disconnect from external Langfuse
     vscode.commands.registerCommand("agentTracing.disconnect", async () => {
       try {

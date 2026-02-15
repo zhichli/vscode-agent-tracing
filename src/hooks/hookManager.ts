@@ -56,6 +56,11 @@ export class HookManager {
     this.safeUnlink(this.langfuseConfigPath);
   }
 
+  /** Path to the aggregate hook.log file. */
+  get hookLogPath(): string {
+    return path.join(this.context.globalStorageUri.fsPath, "logs", "hook.log");
+  }
+
   // ---- shared script ----
 
   private get sharedScriptPath(): string {
