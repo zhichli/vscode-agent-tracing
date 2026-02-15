@@ -3,6 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import { LangfuseManager } from "./stacks/langfuseManager";
 import { HookManager } from "./hooks/hookManager";
+import { HookLogWatcher } from "./hooks/hookLogWatcher";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -23,6 +24,14 @@ export function activate(context: vscode.ExtensionContext) {
     context.extensionUri,
   );
 
+  // Watch hook.log for errors and stream to output channel
+  const hookLogWatcher = new HookLogWatcher(
+    path.join(context.globalStorageUri.fsPath, "logs"),
+    output,
+    () => provider.refresh(),
+  );
+  hookLogWatcher.start();
+
   // Status bar item for transient feedback
   const statusItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
@@ -39,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider("agentTracing.solutions", provider),
+    hookLogWatcher,
     output,
   );
 

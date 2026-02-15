@@ -113,9 +113,9 @@ def debug(message: str, agent: str = "unknown", session_id: str = "") -> None:
         log("DEBUG", message, agent, session_id)
 
 
-def output_and_exit(data: dict | None = None) -> None:
+def output_and_exit(data: dict | None = None, code: int = 0) -> None:
     print(json.dumps(data or {}), flush=True)
-    sys.exit(0)
+    sys.exit(code)
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +611,7 @@ def main() -> None:
     script_start = datetime.now()
     agent = "unknown"
     session_id = ""
+    exit_code = 0
     try:
         hook_input = read_stdin()
         agent = detect_agent(hook_input)
@@ -632,7 +633,7 @@ def main() -> None:
 
         if not LANGFUSE_PUBLIC_KEY or not LANGFUSE_SECRET_KEY:
             log("ERROR", f"Langfuse API keys not set (source={KEY_SOURCE})", agent, session_id)
-            output_and_exit()
+            output_and_exit(code=1)
 
         langfuse = Langfuse(
             public_key=LANGFUSE_PUBLIC_KEY,
@@ -651,12 +652,13 @@ def main() -> None:
         log("INFO", f"Done: {turns} turn(s) in {duration:.1f}s", agent, session_id)
         langfuse.shutdown()
     except Exception as e:
+        exit_code = 1
         try:
             log("ERROR", f"Unhandled: {e}", agent, session_id)
         except Exception:
             pass
 
-    output_and_exit()
+    output_and_exit(code=exit_code)
 
 
 if __name__ == "__main__":
