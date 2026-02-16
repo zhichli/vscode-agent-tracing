@@ -9,7 +9,7 @@ One-click tracing setup for VS Code Copilot Chat and Claude with Langfuse — no
 
 - **One-click setup** — Spins up Langfuse (Docker), installs hooks, wires API keys, opens the dashboard
 - **Dual agent support** — Traces from both GitHub Copilot Chat and Claude sessions
-- **Hook toggle** — Enable/disable tracing with a single inline icon
+- **Hook toggle** — Enable/disable tracing from the sidebar or command palette
 - **Zero-config tracing** — Hooks fire automatically on every agent Stop event
 - **Connect to existing** — Point at any running Langfuse instance (cloud or self-hosted)
 - **Local-first** — All data stays on your machine in Docker volumes
@@ -56,21 +56,20 @@ The sidebar shows a single flat tree view with inline actions on the Langfuse no
 
 ```
 TRACING SOLUTIONS                                [↻]
-├── Langfuse    Running — localhost:3000    [✕] [⏹] [📄] [🔗]
+├── Langfuse    Running — localhost:3000    [📄] [⏹]
 ```
 
 ### States
 
-| State | Inline Icons (L→R) | Right-click Menu |
-|-------|-------------------|-----------------|
+| State | Inline Icons | Right-click Menu |
+|-------|-------------|-----------------|
 | **Not configured** | ▶ Setup | — |
-| **Running + hooks on** | ✕ Disable, ⏹ Stop, 📄 Dashboard, 🔗 External | Login Info, Stack Version |
-| **Running + hooks off** | 🔌 Enable, ⏹ Stop, 📄 Dashboard, 🔗 External | Login Info, Stack Version |
-| **Stopped + hooks on** | ▶ Start, ✕ Disable | Connect External, Stack Version |
-| **Stopped + hooks off** | ▶ Start, 🔌 Enable | Connect External, Stack Version |
+| **Running + hooks on** | 📄 Dashboard, ⏹ Stop | Open External, Login Info, Stack Version, Disable Hooks, Show Hook Log, Recreate, Delete |
+| **Running + hooks off** | 🔌 Enable, 📄 Dashboard, ⏹ Stop | Open External, Login Info, Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
+| **Stopped + hooks on** | ▶ Start | Stack Version, Disable Hooks, Show Hook Log, Recreate, Delete |
+| **Stopped + hooks off** | ▶ Start | Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
+| **Running (external)** | 📄 Dashboard, ⏹ Disconnect | Open External, Disable/Enable Hooks, Show Hook Log |
 | **Docker not found** | ▶ Setup | — |
-
-Clicking the Langfuse row opens the dashboard when running.
 
 ## File Layout
 
@@ -84,19 +83,25 @@ Clicking the Langfuse row opens the dashboard when running.
 
 ## Commands
 
+All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
+
 | Command | Description |
 |---------|-------------|
-| `Agent Tracing: Full Setup` | Backend + hooks + dashboard in one step |
-| `Agent Tracing: Start Stack` | Start Langfuse containers |
-| `Agent Tracing: Stop Stack` | Stop Langfuse containers |
+| `Agent Tracing: Start` | Full setup: backend + hooks + dashboard in one step |
+| `Agent Tracing: Start` (Stack) | Start Langfuse containers (when already configured) |
+| `Agent Tracing: Stop Stack` | Stop Langfuse containers (data preserved) |
+| `Agent Tracing: Recreate Stack` | Rebuild containers, keep trace data |
+| `Agent Tracing: Delete Stack` | Remove containers + all trace data |
 | `Agent Tracing: Open Dashboard` | Open Langfuse in VS Code integrated browser |
-| `Agent Tracing: Open Dashboard (External)` | Open Langfuse in system browser |
-| `Agent Tracing: Show Login Info` | Modal with email/password + copy buttons |
+| `Agent Tracing: Open Dashboard (External Browser)` | Open Langfuse in system browser |
+| `Agent Tracing: Login Info` | Modal with email/password + copy buttons |
 | `Agent Tracing: Connect to Existing Langfuse` | Connect to a running Langfuse instance |
-| `Agent Tracing: Enable Hook` | Enable tracing hooks |
-| `Agent Tracing: Disable Hook` | Disable tracing hooks |
+| `Agent Tracing: Disconnect External Langfuse` | Disconnect from external instance |
+| `Agent Tracing: Enable Hooks` | Enable tracing hooks for all agents |
+| `Agent Tracing: Disable Hooks` | Disable tracing hooks |
+| `Agent Tracing: Show Hook Log` | Open the hook script log for debugging |
+| `Agent Tracing: Stack Info` | Show pinned Docker image versions |
 | `Agent Tracing: Refresh` | Refresh sidebar status |
-| `Agent Tracing: Show Stack Version` | Show pinned Docker image versions |
 
 ## Settings
 
@@ -115,12 +120,11 @@ Open **Output** panel → select **"Agent Tracing"** from the dropdown. Supports
 
 ### Hook Script Logs (Python)
 
-The hook script writes to two places simultaneously:
+The hook script writes to an aggregate log file:
 
 | Log | Path | Purpose |
 |-----|------|---------|
 | **Aggregate** | `<globalStorage>/logs/hook.log` | All agents, all sessions — `tail -f` friendly |
-| **Per-session** | `<globalStorage>/logs/<agent>/<date>/<sessionId>.log` | One file per session |
 
 Enable verbose stderr output:
 
@@ -133,7 +137,7 @@ Enable verbose stderr output:
 
 ```bash
 # Watch all hook executions in real-time
-tail -f ~/.config/Code/User/globalStorage/zhichli.agent-tracing/logs/hook.log
+tail -f ~/.config/Code/User/globalStorage/zhichli.vscode-agent-tracing/logs/hook.log
 
 # Check if hooks are installed
 cat ~/.claude/settings.json | python3 -m json.tool

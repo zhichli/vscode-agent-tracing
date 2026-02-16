@@ -16,12 +16,11 @@ These logs cover: setup steps, Docker operations, hook install/remove, health ch
 
 ### Hook Script Logs (Python — runs per agent event)
 
-The hook script writes to two places:
+The hook script writes to an aggregate log file:
 
 | Log | Path | Use |
 |-----|------|-----|
-| **Aggregate** | `~/.config/Code/User/globalStorage/zhichli.agent-tracing/logs/hook.log` | All agents, all sessions in one file |
-| **Per-session** | `.../logs/<agent>/<YYYY-MM-DD>/<sessionId>.log` | Isolated per-session |
+| **Aggregate** | `~/.config/Code/User/globalStorage/zhichli.vscode-agent-tracing/logs/hook.log` | All agents, all sessions in one file |
 
 > The exact `globalStorage` path varies by OS and VS Code variant. Check the `log_dir` value in `~/.claude/hooks/.langfuse_config.json`.
 
