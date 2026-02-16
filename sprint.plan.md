@@ -1,291 +1,279 @@
-# Sprint Plan — Marketplace Publishing
+# Sprint Plan — v0.1.0 Marketplace Launch
 
-> Goal: Ship v0.1.0 to VS Code Marketplace with all P0 issues resolved.
-
----
-
-## Phase 1: P0 Bug Fixes (must-fix before publish)
-
-### 1.1 Add `session_id` + Langfuse environments to traces
-**Files:** `resources/hooks/langfuse_hook.py`  
-**Scope:** ~20 lines  
-**Status:** DONE  
-**What:** Set `environment` on Langfuse client (per-agent: `github-copilot-chat` / `claude`) and pass `session_id` to `start_as_current_span()`. Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views.
-
-```python
-langfuse = Langfuse(
-    public_key=..., secret_key=..., host=...,
-    environment=AGENT_ENVIRONMENTS.get(agent, "default"),  # ← per-agent env
-)
-
-with langfuse.start_as_current_span(
-    name=f"Turn {turn_num}",
-    session_id=session_id,    # ← groups turns into sessions
-    ...
-)
-```
-
-### 1.2 Fix `disconnect` to also disable hooks
-**Files:** `src/extension.ts`  
-**Scope:** ~3 lines  
-**Status:** DONE  
-**What:** When disconnecting from external Langfuse, also disable hooks (otherwise they fire and fail).
-
-```typescript
-vscode.commands.registerCommand("agentTracing.disconnect", async () => {
-  hookManager.disableHooks();   // ← ADD
-  await langfuse.disconnect();
-  provider.refresh();
-  flashStatus("Disconnected from Langfuse");
-}),
-```
-
-### 1.3 Wrap enable/disable in try-catch
-**Files:** `src/extension.ts`  
-**Scope:** ~10 lines  
-**Status:** DONE  
-**What:** `enableHooks()` and `disableHooks()` do file I/O — catch and surface errors.
-
-### 1.4 Make minio port configurable (or random)
-**Files:** `src/stacks/langfuseManager.ts`  
-**Scope:** ~10 lines  
-**What:** Change `9090:9000` to `${minioPort}:9000` with a computed port (e.g. Langfuse port + 6090) or a setting, to avoid common conflicts.
-
-### 1.5 Add hooks-on/off to node description
-**Files:** `src/views/tracingSolutionsTreeProvider.ts`  
-**Scope:** ~5 lines  
-**Status:** DONE  
-**What:** Running state description: `"Tracing — localhost:3000"` vs `"Running — localhost:3000"` when hooks off.
-
-### 1.6 Debounce nudge notification
-**Files:** `src/extension.ts`  
-**Scope:** ~8 lines  
-**What:** Store last nudge timestamp in globalState, skip if < 5 min ago. Prevents multi-window spam.
+> Goal: Ship a production-quality v0.1.0 to the VS Code Marketplace with CI/CD, telemetry, and issue-tracking infrastructure.
 
 ---
 
-## Phase 2: Polish & Packaging
+## Active Sprint: Pre-Publish Hardening
 
-### 2.1 Test on clean machine
-**What:** Spin up a fresh Linux VM or Docker container, install VS Code + Docker, install the extension from `.vsix`, run full setup flow end-to-end. Verify:
-- [ ] Setup completes without errors
-- [ ] Dashboard opens and loads
-- [ ] Hook fires on Copilot Chat stop event → trace appears
-- [ ] Hook fires on Claude stop event → trace appears
-- [ ] Session grouping works in Langfuse
-- [ ] Tag filtering works (separate agents)
-- [ ] Enable/disable toggle works
-- [ ] Stop/start stack works
-- [ ] Connect to external works
-- [ ] Disconnect cleans up hooks
+### Phase 1: Critical Code Fixes
 
-### 2.2 Verify `.vsix` package contents
-**Status:** DONE  
-Package verified:
-```bash
-npm run package
-# Inspect:
-npx vsce ls
-# Ensure no source files, node_modules, or dev docs are included
-# Ensure resources/hooks/langfuse_hook.py IS included
-# Ensure dist/extension.js IS included
-# Ensure README.md and CHANGELOG.md ARE included (marketplace needs them)
-```
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 1.1 | **Guard `settings.json` against corruption** — if file exists but has invalid JSON, refuse to write and surface an error instead of silently overwriting with `{}` | `hookManager.ts` | DONE |
+| 1.2 | **Handle non-managed Langfuse on port** — when `isRunning()=true` but `isOurManagedStack()=false` during Setup, offer "Connect to It" or "Change Port" instead of falling through to a port-bind failure | `extension.ts` | DONE |
+| 1.3 | **Pin MinIO image** — switch from `cgr.dev/chainguard/minio:latest` to `docker.io/minio/minio` with a release tag. Add TODO comment until exact tag verified. | `stackVersions.ts` | DONE |
+| 1.4 | **Python stdin timeout** — wrap `sys.stdin.read()` with a 30 s `signal.alarm()` guard so a broken agent can't leave zombie hook processes | `langfuse_hook.py` | DONE |
 
-### 2.3 Review `package.json` for marketplace
-**Status:** DONE — all fields verified  
-- [ ] `publisher` field is set (`zhichli`)
-- [ ] `repository` URL is correct
-- [ ] `icon` exists and is 128x128 PNG
-- [ ] `categories` are appropriate (`["AI", "Other"]`)
-- [ ] `keywords` are good for discoverability
-- [ ] `engines.vscode` is correct (`^1.100.0`)
-- [ ] `displayName`, `description` are compelling
-- [ ] `license` is set (`MIT`)
-- [ ] No `preview` flag unless intended
+### Phase 2: UX Polish
 
-### 2.4 Screenshots for marketplace
-Capture 2-3 screenshots showing:
-1. Fresh install → Setup button visible
-2. Running state with traces flowing (Langfuse dashboard in integrated browser)
-3. Sidebar with different states
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 2.1 | **Quiet enable-hook notification** — replace `showInformationMessage` + actions with `flashStatus("Hooks enabled")` for a lightweight toggle | `extension.ts` | DONE |
+| 2.2 | **Quiet disable-hook notification** — replace `showWarningMessage` with `flashStatus("Hooks disabled")` | `extension.ts` | DONE |
+| 2.3 | **Validate keys on Connect External** — call `validateKeys()` after storing keys; warn (non-blocking) if keys don't work | `extension.ts` | DONE |
+| 2.4 | **Auto-start error logging** — replace `.catch(() => {})` with `.catch(e => output.warn(...))` | `extension.ts` | DONE |
+| 2.5 | **Remove duplicate `provider.refresh()`** in `stopStack` command | `extension.ts` | DONE |
+| 2.6 | **Smaller Docker subnet** — change hardcoded `/16` to `/24` to reduce conflict risk | `langfuseManager.ts` | DONE |
 
-Place in `resources/screenshots/` and reference in README.md.
+### Phase 3: Documentation Alignment
+
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 3.1 | **Spec: remove "Click row → opens dashboard"** from §2 (tree click not implemented; dashboard opened via inline icon) | `spec.md` | DONE |
+| 3.2 | **Spec: update Disable behavior in §4/§6** — disable now removes script + config file (clean uninstall); enable re-copies from extension resources | `spec.md` | DONE |
+| 3.3 | **README: fix states table** — remove `🔌 Connect` from "Not configured" inline icons (it's a Command Palette action, not inline) | `README.md` | DONE |
 
 ---
 
-## Phase 3: GitHub Release Workflow
-**Status:** DONE
+## Pre-Publish Pipeline
 
-### 3.1 Create `.github/workflows/release.yml`
-**Status:** DONE  
+### Phase 4: Marketplace Account Setup
+
+One-time steps (manual, ~30 min):
+
+| # | Step | Detail |
+|---|------|--------|
+| 4.1 | **Create Azure DevOps organization** | Go to `https://dev.azure.com` → create an org (or use existing). |
+| 4.2 | **Create Personal Access Token (PAT)** | Org Settings → Personal Access Tokens → New Token. Scopes: **Marketplace → Manage**. Expiry: 1 year. Copy immediately. |
+| 4.3 | **Create VS Code Marketplace publisher** | Run `npx vsce create-publisher zhichli` or visit `https://marketplace.visualstudio.com/manage`. Use the publisher ID `zhichli` (must match `package.json`). |
+| 4.4 | **Verify publisher** | Run `npx vsce login zhichli` and paste the PAT. Confirm with `npx vsce ls-publishers`. |
+| 4.5 | **Add `VSCE_PAT` to GitHub repo secrets** | GitHub → Settings → Secrets and variables → Actions → New repository secret → name: `VSCE_PAT`, value: the PAT from 4.2. |
+| 4.6 | **(Optional) Open VSX token** | Create account at `https://open-vsx.org` → Access Tokens → create. Add as `OVSX_PAT` in GitHub secrets. Enables Cursor/VSCodium installs. |
+
+### Phase 5: CI/CD Pipeline with Auto-Versioning
+
+> Current state: `ci.yml` (build on push/PR) and `release.yml` (publish on `v*` tag) exist and work. Add auto-versioning via `release-please`.
+
+| # | Task | Status |
+|---|------|--------|
+| 5.1 | **Add `release-please` workflow** — creates version-bump PRs from conventional commits. On merge: bumps `package.json`, updates `CHANGELOG.md`, creates a GitHub Release with a `v*` tag, which triggers the existing `release.yml` publish. | TODO |
+| 5.2 | **Add `CHANGELOG.md` automation** — `release-please` generates this from conventional commit messages. Remove hand-written entries. | TODO |
+| 5.3 | **Verify `release.yml` triggers correctly** — release-please creates a tag → existing workflow publishes to Marketplace + Open VSX. Dry-run with a test tag. | TODO |
+
+**Workflow: Release-Please (new file: `.github/workflows/release-please.yml`)**
 
 ```yaml
-name: Release & Publish
-
-on:
-  push:
-    tags: ['v*']
-
-permissions:
-  contents: write
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      
-      - run: npm ci
-      
-      - run: npm run build
-      
-      - name: Package VSIX
-        run: npx vsce package -o agent-tracing-${{ github.ref_name }}.vsix
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: '*.vsix'
-          generate_release_notes: true
-      
-      - name: Publish to VS Code Marketplace
-        run: npx vsce publish
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      
-      - name: Publish to Open VSX
-        run: npx ovsx publish agent-tracing-${{ github.ref_name }}.vsix -p ${{ secrets.OVSX_PAT }}
-        continue-on-error: true  # Optional: Open VSX for Cursor/VSCodium users
-```
-
-### 3.2 Create `.github/workflows/ci.yml`
-**Status:** DONE  
-
-```yaml
-name: CI
+name: Release Please
 
 on:
   push:
     branches: [main]
-  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  build:
+  release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: googleapis/release-please-action@v4
         with:
-          node-version: 20
-      - run: npm ci
-      - run: npm run build
-      - run: npx tsc --noEmit
+          release-type: node
+          package-name: vscode-agent-tracing
 ```
 
-### 3.3 Set up secrets
-- `VSCE_PAT` — Personal Access Token from https://dev.azure.com/ → User Settings → Personal Access Tokens
-  - Scope: Marketplace → Manage
-  - Publisher: `zhichli`
-- `OVSX_PAT` (optional) — Token from https://open-vsx.org/
+**How it works:**
+1. Developer merges PRs with conventional commit messages (`feat:`, `fix:`, `chore:`)
+2. `release-please` opens/updates a "Release PR" that bumps version + updates CHANGELOG
+3. When you merge the Release PR, it creates a git tag (`v0.1.1`) + GitHub Release
+4. The existing `release.yml` triggers on the `v*` tag → builds → publishes
 
----
+**Manual override:** `npm version patch && git push --tags` to bypass release-please for hotfixes.
 
-## Phase 4: Publish Checklist
+### Phase 6: GitHub Project Setup
 
-### First-time setup (one-time)
+| # | Task | Status |
+|---|------|--------|
+| 6.1 | **Bug report issue template** — `.github/ISSUE_TEMPLATE/bug_report.yml` with OS, VS Code version, Docker version, extension version, steps, logs | DONE |
+| 6.2 | **Feature request issue template** — `.github/ISSUE_TEMPLATE/feature_request.yml` | DONE |
+| 6.3 | **Issue template config** — `.github/ISSUE_TEMPLATE/config.yml` disabling blank issues, linking to Discussions | TODO |
+| 6.4 | **(Optional) Security policy** — `SECURITY.md` with vulnerability reporting instructions | TODO |
+| 6.5 | **(Optional) Code of Conduct** — `CODE_OF_CONDUCT.md` (Contributor Covenant) | TODO |
+
+### Phase 7: Telemetry & Monitoring
+
+> **Best practice for VS Code extension authors:** Use [`@vscode/extension-telemetry`](https://github.com/microsoft/vscode-extension-telemetry), the official Microsoft package that wraps Azure Application Insights. It automatically respects the user's `telemetry.telemetryLevel` VS Code setting — no additional consent UI needed. This is the same package used by Microsoft's own extensions (Python, C++, Java, etc.).
+
+| # | Task | Status |
+|---|------|--------|
+| 7.1 | **Create Azure Application Insights resource** | TODO |
+| 7.2 | **Install `@vscode/extension-telemetry`** | TODO |
+| 7.3 | **Initialize telemetry reporter in `activate()`** | TODO |
+| 7.4 | **Instrument key events** | TODO |
+| 7.5 | **Set up Azure dashboard + alerts** | TODO |
+
+#### 7.1 Azure Application Insights Setup
+
+1. Azure Portal → Create Resource → Application Insights
+2. Name: `agent-tracing-prod`, Region: your preference
+3. Copy the **Connection String** (not the old Instrumentation Key)
+
+#### 7.2–7.3 Integration
+
 ```bash
-# 1. Create Azure DevOps PAT
-#    Go to: https://dev.azure.com/<org>/_usersSettings/tokens
-#    Create token with Marketplace > Manage scope
-
-# 2. Create publisher (if not exists)
-npx vsce create-publisher zhichli
-
-# 3. Login
-npx vsce login zhichli
-
-# 4. Add PAT to GitHub Secrets
-#    Settings → Secrets → Actions → VSCE_PAT
+npm install @vscode/extension-telemetry
 ```
 
-### Release process
-```bash
-# 1. Ensure main is clean and built
-git checkout main && git pull
-npm run build && npx tsc --noEmit
-
-# 2. Bump version
-npm version patch  # or minor/major
-# This creates a commit + tag: v0.1.1
-
-# 3. Push with tag
-git push origin main --tags
-
-# 4. GitHub Actions does the rest:
-#    - Builds → Packages .vsix → Creates GitHub Release → Publishes to Marketplace
-
-# 5. Verify
-#    - https://marketplace.visualstudio.com/items?itemName=zhichli.vscode-agent-tracing
-#    - Install from marketplace in a clean VS Code
-```
-
-### Manual publish (fallback)
-```bash
-npm run package
-npx vsce publish
-```
-
----
-
-## Phase 5: Trace Isolation (DONE — v0.1 uses Langfuse Environments)
-
-### Implemented: Langfuse Environments
-
-Each agent gets its own Langfuse environment:
-- VS Code Copilot Chat → environment `github-copilot-chat`
-- Claude → environment `claude`
-
-Users filter by environment in the Langfuse nav-bar dropdown — applies globally across all views (traces, sessions, observations, scores).
-
-**Why environments over tags/projects:**
-
-| Approach | Filtering | UX | Complexity |
-|----------|-----------|-----|------------|
-| Tags | Per-view filter, must re-apply each time | Ok | Low |
-| Separate projects | Switch projects in dropdown | Good but heavy | High (API needed for 2nd project) |
-| **Environments** | **Global nav-bar filter, persists across all views** | **Best** | **Low** |
-
-### Org/Project Naming
-- Org: **Local** (represents the local machine — local-first tool)
-- Project: **Agent Traces** (describes content)
-- Nav header: `Local › Agent Traces`
-- Environments auto-created on first trace ingestion
-
-### Future (v0.2+): `TRACE_AGENTS` env var
-If a user only wants to trace one agent:
+In `package.json`, add (top-level, not inside `contributes`):
 ```json
 {
-  "env": {
-    "TRACE_AGENTS": "github-copilot-chat"
+  "applicationinsights.connectionstring": "<your-connection-string>"
+}
+```
+
+In `extension.ts`:
+```typescript
+import TelemetryReporter from "@vscode/extension-telemetry";
+
+let telemetry: TelemetryReporter;
+
+export function activate(context: vscode.ExtensionContext) {
+  telemetry = new TelemetryReporter(context);
+  context.subscriptions.push(telemetry);
+  // ...
+}
+```
+
+#### 7.4 Key Events to Instrument
+
+| Event Name | Properties | When |
+|------------|-----------|------|
+| `setup/complete` | `duration_ms`, `agent` | Setup finishes successfully |
+| `setup/failed` | `error`, `step` | Setup fails at any step |
+| `stack/start` | `mode` (managed/external) | User starts Langfuse |
+| `stack/stop` | — | User stops Langfuse |
+| `hook/enable` | — | Hooks toggled on |
+| `hook/disable` | — | Hooks toggled off |
+| `hook/error` | `error_summary` | Hook log watcher detects ERROR |
+| `connect/external` | `host_hash` (hashed, no PII) | User connects to external Langfuse |
+| `dashboard/open` | `target` (integrated/external) | User opens dashboard |
+
+**Error tracking:** Wrap command handlers with `telemetry.sendTelemetryErrorEvent("command/error", { command, message })`.
+
+#### 7.5 Azure Dashboard
+
+- **KQL queries** for: DAU, setup success rate, error rate by type, agent distribution
+- **Alerts** for: error rate spike (>5% of activations in 1 hr), setup failure rate (>20%)
+- **Workbook** pinned to Azure Portal for at-a-glance monitoring
+
+#### Privacy
+
+- Never send: file paths, project names, trace content, API keys, hostnames
+- Hash any identifiers before sending (e.g., SHA-256 of host URL)
+- All telemetry is automatically disabled when the user sets `telemetry.telemetryLevel: "off"` in VS Code
+- Add a privacy note in README: *"This extension collects anonymous usage telemetry via Azure Application Insights to improve the product. It respects your VS Code telemetry settings."*
+
+### Phase 8: Public-Facing Polish
+
+| # | Task | Status |
+|---|------|--------|
+| 8.1 | **Marketplace description** — `package.json` `description` is compelling (✓ already good) | DONE |
+| 8.2 | **Extension icon** — verify `resources/icons/agent-tracing-128.png` is sharp at 128×128 | DONE |
+| 8.3 | **Gallery banner** — add `galleryBanner` to `package.json` for marketplace hero area | TODO |
+| 8.4 | **Screenshots** — capture 2-3 screenshots: (1) fresh install, (2) running with dashboard, (3) Langfuse traces view. Place in `resources/screenshots/`. Reference in README. | TODO |
+| 8.5 | **Marketplace badges** — add build status + version badges to README | TODO |
+| 8.6 | **CHANGELOG.md** — hand-written for v0.1.0, then automated by release-please for future versions | DONE |
+| 8.7 | **Verify `.vsixignore`** — ensure no source files, `node_modules`, or dev docs leak into the package | TODO |
+| 8.8 | **Verify `vsce ls` output** — final package contents check | TODO |
+
+**Gallery banner** (add to `package.json`):
+```json
+{
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
   }
 }
 ```
-Hook script checks this var and exits early if current agent isn't in the list.
+
+### Phase 9: Pre-Publish Testing
+
+| # | Task | Status |
+|---|------|--------|
+| 9.1 | **Clean VM / container test** — fresh Linux with Docker + VS Code, install from `.vsix`, run full setup E2E | TODO |
+| 9.2 | **Verify Copilot Chat hook fires** → trace appears in Langfuse dashboard | TODO |
+| 9.3 | **Verify Claude hook fires** → trace appears in Langfuse dashboard | TODO |
+| 9.4 | **Session grouping** — multiple turns group under one session in Langfuse | TODO |
+| 9.5 | **Environment filtering** — separate `github-copilot-chat` and `claude` environments | TODO |
+| 9.6 | **Enable/disable toggle** — hooks toggle correctly, no leftover config | TODO |
+| 9.7 | **Stop/start stack** — containers stop/start, health check passes | TODO |
+| 9.8 | **Connect external** — connect to a separate Langfuse instance | TODO |
+| 9.9 | **Disconnect** — hooks disabled, config cleaned | TODO |
+| 9.10 | **Port conflict** — change port setting, re-setup | TODO |
+| 9.11 | **Multiple VS Code windows** — nudge debounce works, no hook write races | TODO |
+
+### Phase 10: Launch Day Checklist
+
+```bash
+# 1. Ensure main is clean and CI passes
+git checkout main && git pull
+npm run build && npx tsc --noEmit
+
+# 2. Tag (or merge release-please PR)
+npm version patch  # creates v0.1.0 tag
+git push origin main --tags
+
+# 3. CI does the rest → GitHub Release + Marketplace publish
+
+# 4. Verify
+open "https://marketplace.visualstudio.com/items?itemName=zhichli.vscode-agent-tracing"
+# Install from marketplace in a clean VS Code window
+
+# 5. Monitor
+# Azure Application Insights → Live Metrics (first 15 min)
+# GitHub Issues → watch for first-hour bug reports
+
+# 6. Announce
+# - GitHub Discussions: "v0.1.0 released"
+# - Reddit: r/vscode, r/CodingWithAI
+# - Twitter/X: demo GIF + marketplace link
+```
 
 ---
 
-## Sprint Order
+## Completed Phases (reference)
 
-```
-Phase 1 (P0 fixes)     → 1 session, ~60 lines total
-Phase 2 (polish)        → 1 session, mostly manual testing
-Phase 3 (CI/CD)         → 1 session, workflow files + secrets
-Phase 4 (publish)       → 30 min, run commands + verify
+<details>
+<summary>Phase: P0 Bug Fixes (sprint 1)</summary>
 
-Total: ~3 sessions to marketplace
-```
+| # | Task | Status |
+|---|------|--------|
+| — | Add `session_id` + Langfuse environments to traces | DONE |
+| — | Fix `disconnect` to also disable hooks | DONE |
+| — | Wrap enable/disable in try-catch | DONE |
+| — | Add hooks-on/off to node description | DONE |
+| — | Debounce nudge notification (5 min cooldown in globalState) | DONE |
+
+</details>
+
+<details>
+<summary>Phase: GitHub Release Workflow</summary>
+
+| # | Task | Status |
+|---|------|--------|
+| — | `.github/workflows/release.yml` — tag-triggered publish | DONE |
+| — | `.github/workflows/ci.yml` — build + type-check on push/PR | DONE |
+
+</details>
+
+<details>
+<summary>Phase: Trace Isolation via Langfuse Environments</summary>
+
+- VS Code Copilot Chat → environment `github-copilot-chat`
+- Claude → environment `claude`
+- Users filter by environment in Langfuse nav-bar dropdown (global filter)
+- Org: **VS Code**, Project: **Agent Tracing**
+
+</details>

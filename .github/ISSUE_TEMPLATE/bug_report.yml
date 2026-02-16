@@ -1,0 +1,95 @@
+name: Bug Report
+description: Report a bug with the Agent Tracing extension
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill out the sections below to help us reproduce the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+      placeholder: "When I click Setup, the extension shows an error..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to trigger the bug.
+      placeholder: |
+        1. Open VS Code
+        2. Click Agent Tracing icon in Activity Bar
+        3. Click Setup on Langfuse row
+        4. ...
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension Version
+      description: "Find in Extensions sidebar or run: code --list-extensions --show-versions | grep agent-tracing"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code Version
+      description: "Help → About, or: code --version"
+      placeholder: "1.100.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux
+        - macOS
+        - Windows (WSL)
+        - Windows (native)
+    validations:
+      required: true
+
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker Version
+      description: "Run: docker --version"
+      placeholder: "Docker version 27.0.0"
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent(s) are affected?
+      multiple: true
+      options:
+        - GitHub Copilot Chat
+        - Claude
+        - Both
+        - N/A (not agent-specific)
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: |
+        Paste logs from:
+        - **Extension:** Output panel → "Agent Tracing (Log)"
+        - **Hook script:** `~/.config/Code/User/globalStorage/zhichli.agent-tracing/logs/hook.log`
+      render: text
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain the problem.
