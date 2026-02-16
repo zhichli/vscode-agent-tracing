@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/zhichli/vscode-agent-tracing/compare/v0.1.1...v0.2.0) (2026-02-16)
+
+
+### Features
+
+* add @vscode/extension-telemetry dependency ([cd944d1](https://github.com/zhichli/vscode-agent-tracing/commit/cd944d16c0c8a5528ce1ef12b6db959e7532e537))
+* add Bicep infra for App Insights + deploy workflow ([66f7262](https://github.com/zhichli/vscode-agent-tracing/commit/66f72625e4c0b79f2cdf1848c4125fdb1091e45e))
+* wire telemetry and instrument all commands ([4408aa9](https://github.com/zhichli/vscode-agent-tracing/commit/4408aa92b933995d46718d9ecd0ca62edb7f5682))
+
+
+### Bug Fixes
+
+* inject telemetry connection string from secret at release time ([b3947cf](https://github.com/zhichli/vscode-agent-tracing/commit/b3947cff8d3f45d0349dfa8a83cf96468f758556))
+* pin MinIO image to RELEASE.2025-09-07T16-13-09Z ([c2923f1](https://github.com/zhichli/vscode-agent-tracing/commit/c2923f1b01702571072491e4fdf989d84b607361))
+
 ## 0.1.0
 
 ### Features
