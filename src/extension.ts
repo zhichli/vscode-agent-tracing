@@ -4,6 +4,7 @@ import { LangfuseManager } from "./stacks/langfuseManager";
 import { HookManager } from "./hooks/hookManager";
 import { HookLogWatcher } from "./hooks/hookLogWatcher";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
+import { initTelemetry, sendEvent, sendError } from "./telemetry";
 
 export function activate(context: vscode.ExtensionContext) {
   // Ensure the VS Code Integrated Browser is used instead of Simple Browser
@@ -14,6 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const output = vscode.window.createOutputChannel("Agent Tracing", { log: true });
+  initTelemetry(context);
   const langfuse = new LangfuseManager(context, output);
   const hookManager = new HookManager(context, langfuse, output);
 
@@ -107,10 +109,12 @@ export function activate(context: vscode.ExtensionContext) {
             await langfuse.openDashboard();
 
             flashStatus("Setup complete");
+            sendEvent("setup/complete", { mode: "managed" });
           } catch (e: any) {
             vscode.window.showErrorMessage(
               `Setup failed: ${e.message}`,
             );
+            sendError("setup/failed", { error: e.message });
           }
         },
       );
@@ -139,8 +143,10 @@ export function activate(context: vscode.ExtensionContext) {
           },
         );
         flashStatus("Langfuse started");
+        sendEvent("stack/start", { mode: "managed" });
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to start Langfuse: ${e.message}`);
+        sendError("stack/start-failed", { error: e.message });
       }
     }),
 
@@ -160,9 +166,11 @@ export function activate(context: vscode.ExtensionContext) {
           },
         );
         flashStatus("Langfuse stopped");
+        sendEvent("stack/stop");
         provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to stop Langfuse: ${e.message}`);
+        sendError("stack/stop-failed", { error: e.message });
       }
     }),
 
@@ -188,6 +196,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
         );
         flashStatus("Stack recreated — trace data preserved");
+        sendEvent("stack/recreate");
         provider.refresh();
         await langfuse.openDashboard();
       } catch (e: any) {
@@ -218,6 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
           },
         );
         flashStatus("Stack deleted");
+        sendEvent("stack/purge");
         provider.refresh();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to purge stack: ${e.message}`);
@@ -226,11 +236,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Open dashboard in VS Code integrated browser
     vscode.commands.registerCommand("agentTracing.openDashboard", async () => {
+      sendEvent("dashboard/open", { target: "integrated" });
       await langfuse.openDashboard();
     }),
 
     // Open dashboard in external system browser
     vscode.commands.registerCommand("agentTracing.openDashboardExternal", async () => {
+      sendEvent("dashboard/open", { target: "external" });
       await langfuse.openDashboardExternal();
     }),
 
@@ -255,6 +267,7 @@ export function activate(context: vscode.ExtensionContext) {
         hookManager.enableHooks();
         provider.refresh();
         flashStatus("Hooks enabled — tracing active");
+        sendEvent("hook/enable");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
       }
@@ -266,6 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
         hookManager.disableHooks();
         provider.refresh();
         flashStatus("Hooks disabled");
+        sendEvent("hook/disable");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
       }
@@ -342,6 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
       await hookManager.installAll();
       provider.refresh();
       flashStatus("Connected to external Langfuse");
+      sendEvent("connect/external");
 
       // 6. Open dashboard
       await langfuse.openDashboard();
@@ -376,6 +391,7 @@ export function activate(context: vscode.ExtensionContext) {
       await langfuse.disconnect();
       provider.refresh();
       flashStatus("Disconnected from Langfuse");
+      sendEvent("disconnect");
     }),
   );
 
