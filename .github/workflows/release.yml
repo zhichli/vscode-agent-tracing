@@ -19,6 +19,17 @@ jobs:
 
       - run: npm ci
 
+      - name: Inject telemetry connection string
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.telemetryConnectionString = process.env.APPINSIGHTS_CONNECTION_STRING || '';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+        env:
+          APPINSIGHTS_CONNECTION_STRING: ${{ secrets.APPINSIGHTS_CONNECTION_STRING }}
+
       - run: npm run build
 
       - run: npx tsc --noEmit
