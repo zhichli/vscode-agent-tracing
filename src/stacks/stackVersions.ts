@@ -63,7 +63,10 @@ export const LANGFUSE_STACK_VERSION: LangfuseStackVersion = {
     },
     minio: {
       label: "MinIO",
-      image: "cgr.dev/chainguard/minio",
+      image: "docker.io/minio/minio",
+      // TODO: Pin to a specific RELEASE tag before v0.1.0 publish.
+      // Official minio tags use format: RELEASE.YYYY-MM-DDThh-mm-ssZ
+      // See: https://hub.docker.com/r/minio/minio/tags
       tag: "latest",
     },
     redis: {

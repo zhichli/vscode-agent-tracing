@@ -317,13 +317,13 @@ export class LangfuseManager {
     const action = await vscode.window.showInformationMessage(
       `Langfuse Login\n\nEmail: ${LANGFUSE_DEFAULT_USER.email}\nPassword: ${LANGFUSE_DEFAULT_USER.password}`,
       { modal: true },
-      "Copy Password",
-      "Copy Email",
-      "Cancel",
+      { title: "Copy Email" },
+      { title: "Copy Password" },
+      { title: "Cancel", isCloseAffordance: true },
     );
-    if (action === "Copy Email") {
+    if (action?.title === "Copy Email") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
-    } else if (action === "Copy Password") {
+    } else if (action?.title === "Copy Password") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.password);
     }
   }
@@ -339,14 +339,14 @@ export class LangfuseManager {
     const action = await vscode.window.showInformationMessage(
       `Langfuse Stack v${sv.version}  (pinned ${sv.pinnedAt})`,
       { modal: true, detail },
-      "Copy to Clipboard",
-      "Show in Output",
-      "Cancel",
+      { title: "Copy to Clipboard" },
+      { title: "Show in Output" },
+      { title: "Cancel", isCloseAffordance: true },
     );
 
-    if (action === "Copy to Clipboard") {
+    if (action?.title === "Copy to Clipboard") {
       await vscode.env.clipboard.writeText(formatLangfuseStackSummary(sv));
-    } else if (action === "Show in Output") {
+    } else if (action?.title === "Show in Output") {
       this.output.info(formatLangfuseStackSummary(sv));
       this.output.show(true);
     }
@@ -613,7 +613,7 @@ networks:
     name: agent-tracing
     ipam:
       config:
-        - subnet: 172.177.0.0/16
+        - subnet: 172.177.0.0/24
 `;
   }
 

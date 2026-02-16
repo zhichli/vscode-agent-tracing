@@ -12,10 +12,17 @@ Install: managed automatically by the Agent Tracing VS Code extension.
 
 import json
 import os
+import signal
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Stdin read timeout (seconds) — prevents zombie processes if an agent
+# doesn't close stdin properly.
+# ---------------------------------------------------------------------------
+STDIN_TIMEOUT_SEC = 30
 
 # ---------------------------------------------------------------------------
 # Configuration — env-var-first, .langfuse_config.json fallback
@@ -147,11 +154,18 @@ def resolve_uri(value: Any) -> str:
 
 def read_stdin() -> dict:
     try:
+        # Guard against agents that never close stdin — kill after timeout
+        if hasattr(signal, "SIGALRM"):
+            old_handler = signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("stdin read timed out")))
+            signal.alarm(STDIN_TIMEOUT_SEC)
         raw = sys.stdin.read()
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
         if not raw.strip():
             return {}
         return json.loads(raw)
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, IOError, TimeoutError):
         return {}
 
 
