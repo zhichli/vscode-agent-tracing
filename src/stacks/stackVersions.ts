@@ -41,8 +41,8 @@ export interface LangfuseStackVersion {
  * Bump `version` whenever any image tag is changed.
  */
 export const LANGFUSE_STACK_VERSION: LangfuseStackVersion = {
-  version: "1.0.0",
-  pinnedAt: "2026-02-12",
+  version: "1.1.0",
+  pinnedAt: "2026-02-15",
   composeRef:
     "https://raw.githubusercontent.com/langfuse/langfuse/cec6febb289ec26a8c135246793219e6a6a1451b/docker-compose.yml",
   images: {
@@ -64,10 +64,7 @@ export const LANGFUSE_STACK_VERSION: LangfuseStackVersion = {
     minio: {
       label: "MinIO",
       image: "docker.io/minio/minio",
-      // TODO: Pin to a specific RELEASE tag before v0.1.0 publish.
-      // Official minio tags use format: RELEASE.YYYY-MM-DDThh-mm-ssZ
-      // See: https://hub.docker.com/r/minio/minio/tags
-      tag: "latest",
+      tag: "RELEASE.2025-09-07T16-13-09Z",
     },
     redis: {
       label: "Redis",
