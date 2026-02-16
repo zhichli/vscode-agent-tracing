@@ -106,7 +106,7 @@ export class HookManager {
 
   /** Write / update the single hook entry + root env. */
   private writeHookConfig(): void {
-    const settings = this.readJsonSafe(this.settingsPath);
+    const settings = this.readSettingsOrEmpty();
 
     if (!settings.hooks || typeof settings.hooks !== "object" || Array.isArray(settings.hooks)) {
       settings.hooks = {};
@@ -225,6 +225,24 @@ export class HookManager {
 
   private resourcePath(...segments: string[]): string {
     return path.join(this.context.extensionPath, "resources", ...segments);
+  }
+
+  /**
+   * Read ~/.claude/settings.json safely.
+   * Returns {} if the file does not exist.
+   * Throws if the file exists but contains invalid JSON to prevent
+   * silently overwriting the user's other hooks and env vars.
+   */
+  private readSettingsOrEmpty(): any {
+    if (!fs.existsSync(this.settingsPath)) return {};
+    const raw = fs.readFileSync(this.settingsPath, "utf-8");
+    try {
+      return JSON.parse(raw);
+    } catch (e: any) {
+      throw new Error(
+        `~/.claude/settings.json contains invalid JSON — please fix it before enabling hooks. Parse error: ${e.message}`,
+      );
+    }
   }
 
   private readJsonSafe(filePath: string): any {
