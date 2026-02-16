@@ -45,7 +45,6 @@ TRACING SOLUTIONS                                    [↻] [...]
 
 - Langfuse: icon `$(pass-filled)` green. Leaf node (no children).
 - Inline L→R: **Disable Hooks** `$(close)`, **Stop** `$(debug-stop)`, **Open Dashboard** `$(open-preview)`, **Open External** `$(link-external)`.
-- Click row → opens dashboard in integrated browser.
 - Right-click context menu: **Login Info**, **Stack Version**.
 - **Login Info** opens a modal dialog (`vscode.window.showInformationMessage` with `modal: true`) displaying email and password, with **Copy Email** and **Copy Password** buttons.
 
@@ -223,8 +222,8 @@ This way:
 #### Enable / Disable
 
 Single toggle (not per-agent):
-- **Disable**: Remove the `langfuse_hook.py` entry from `hooks.Stop` + remove Langfuse env keys from root `env`.
-- **Enable**: Re-add entry + root env using keys from `.langfuse_config.json`.
+- **Disable**: Remove the `langfuse_hook.py` entry from `hooks.Stop` + remove Langfuse env keys from root `env`. Also removes `langfuse_hook.py` + `.langfuse_config.json` for a clean uninstall.
+- **Enable**: Re-copies script from extension resources, writes `.langfuse_config.json`, and re-adds entry + root env using persisted keys from `globalState`.
 
 ---
 
@@ -249,8 +248,8 @@ Hooks use a single toggle on the Langfuse node (not per-agent).
 
 | Action | Trigger | Behavior |
 |--------|---------|----------|
-| **Disable hooks** | `$(close)` inline icon on Langfuse node (leftmost) | Removes hook entry from `~/.claude/settings.json` + cleans root env keys. Script + `.langfuse_config.json` stay on disk for re-enable. |
-| **Enable hooks** | `$(plug)` inline icon on Langfuse node (leftmost) | Writes hook entry + root env back using persisted keys. |
+| **Disable hooks** | `$(close)` inline icon on Langfuse node (leftmost) | Removes hook entry from `~/.claude/settings.json` + cleans root env keys. Also removes `langfuse_hook.py` and `.langfuse_config.json` for a clean uninstall. |
+| **Enable hooks** | `$(plug)` inline icon on Langfuse node (leftmost) | Re-copies script from extension resources, writes `.langfuse_config.json`, and writes hook entry + root env back using persisted keys. |
 
 Also available via command palette: `Agent Tracing: Enable Hook` / `Agent Tracing: Disable Hook`.
 

@@ -63,12 +63,12 @@ TRACING SOLUTIONS                                [↻]
 
 | State | Inline Icons (L→R) | Right-click Menu |
 |-------|-------------------|-----------------|
-| **Not configured** | ▶ Setup, 🔌 Connect | — |
+| **Not configured** | ▶ Setup | — |
 | **Running + hooks on** | ✕ Disable, ⏹ Stop, 📄 Dashboard, 🔗 External | Login Info, Stack Version |
 | **Running + hooks off** | 🔌 Enable, ⏹ Stop, 📄 Dashboard, 🔗 External | Login Info, Stack Version |
 | **Stopped + hooks on** | ▶ Start, ✕ Disable | Connect External, Stack Version |
 | **Stopped + hooks off** | ▶ Start, 🔌 Enable | Connect External, Stack Version |
-| **Docker not found** | ▶ Setup, 🔌 Connect | — |
+| **Docker not found** | ▶ Setup | — |
 
 Clicking the Langfuse row opens the dashboard when running.
 
