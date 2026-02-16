@@ -27,6 +27,11 @@
     "claude-code"
   ],
   "icon": "resources/icons/agent-tracing-128.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "pricing": "Free",
   "activationEvents": [
     "onStartupFinished"
   ],

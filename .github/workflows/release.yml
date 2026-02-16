@@ -21,6 +21,8 @@ jobs:
 
       - run: npm run build
 
+      - run: npx tsc --noEmit
+
       - name: Package VSIX
         run: npx vsce package -o agent-tracing-${{ github.ref_name }}.vsix
 
@@ -31,11 +33,12 @@ jobs:
           generate_release_notes: true
 
       - name: Publish to VS Code Marketplace
-        run: npx vsce publish
+        run: npx vsce publish --packagePath agent-tracing-${{ github.ref_name }}.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       - name: Publish to Open VSX
-        if: ${{ secrets.OVSX_PAT != '' }}
         run: npx ovsx publish agent-tracing-${{ github.ref_name }}.vsix -p ${{ secrets.OVSX_PAT }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
         continue-on-error: true

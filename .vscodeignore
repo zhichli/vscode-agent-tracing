@@ -4,6 +4,7 @@ node_modules/**
 tsconfig.json
 esbuild.js
 .gitignore
+.github/**
 **/*.ts
 **/*.map
 spec.md
@@ -11,3 +12,4 @@ plan.md
 sprint.plan.md
 CONTRIBUTING.md
 TROUBLESHOOTING.md
+resources/hooks/__pycache__/**
