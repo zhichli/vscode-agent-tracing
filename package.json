@@ -2,7 +2,7 @@
   "name": "vscode-agent-tracing",
   "displayName": "Agent Tracing",
   "description": "Local-first observability for AI coding agents. One-click setup for tracing VS Code Copilot and Claude sessions with pluggable backends like Langfuse.",
-  "version": "0.1.0",
+  "version": "0.1.1-rc.0",
   "publisher": "zhichli",
   "license": "MIT",
   "repository": {
@@ -180,7 +180,6 @@
           "when": "view == agentTracing.solutions && viewItem == langfuse-docker-not-found",
           "group": "inline@1"
         },
-
         {
           "command": "agentTracing.enableHook",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-off$/",
@@ -211,7 +210,6 @@
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-external/",
           "group": "inline@3"
         },
-
         {
           "command": "agentTracing.openDashboardExternal",
           "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
@@ -247,7 +245,6 @@
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
           "group": "langfuse-danger@2"
         },
-
         {
           "command": "agentTracing.startStack",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-stopped/",
@@ -263,7 +260,6 @@
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-off",
           "group": "langfuse@5"
         }
-
       ]
     },
     "configuration": {
