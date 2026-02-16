@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import * as os from "os";
 import { LangfuseManager } from "./stacks/langfuseManager";
 import { HookManager } from "./hooks/hookManager";
 import { HookLogWatcher } from "./hooks/hookLogWatcher";
@@ -169,12 +168,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Recreate stack (rebuild containers, keep trace data in volumes)
     vscode.commands.registerCommand("agentTracing.recreateStack", async () => {
-      const confirm = await vscode.window.showWarningMessage(
-        "This will stop and rebuild all Langfuse containers. Your trace data will be preserved.",
-        { modal: true, detail: "Containers will be destroyed and recreated from the latest compose config. Database volumes (Postgres, ClickHouse) are kept — all existing traces, sessions, and projects remain intact." },
+      const confirm = await confirmModal(
+        "This will stop and rebuild all Langfuse containers",
+        "Containers will be destroyed and recreated from the latest compose config. Database volumes are kept — traces preserved.",
         "Recreate",
       );
-      if (confirm !== "Recreate") return;
+      if (!confirm) return;
 
       try {
         await vscode.window.withProgress(
@@ -198,12 +197,12 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Purge stack (destroy containers + volumes — wipes all data)
     vscode.commands.registerCommand("agentTracing.purgeStack", async () => {
-      const confirm = await vscode.window.showWarningMessage(
-        "This will permanently delete all Langfuse containers, volumes, and trace data. This cannot be undone.",
-        { modal: true, detail: "All Docker containers, database volumes (Postgres, ClickHouse), and stored traces will be removed. You will need to run Full Setup again to start tracing." },
+      const confirm = await confirmModal(
+        "This will PERMANENTLY delete all Langfuse data",
+        "All Docker containers, database volumes, and stored traces will be removed. Cannot be undone.",
         "Delete Everything",
       );
-      if (confirm !== "Delete Everything") return;
+      if (!confirm) return;
 
       try {
         await vscode.window.withProgress(
@@ -253,30 +252,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Enable hooks
     vscode.commands.registerCommand("agentTracing.enableHook", async () => {
       try {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-          },
-          async (progress) => {
-            progress.report({ message: "Installing hook script…" });
-            hookManager.enableHooks();
-            progress.report({ message: "Hook config written to ~/.claude/settings.json" });
-            provider.refresh();
-          },
-        );
-        const action = await vscode.window.showInformationMessage(
-          "Hooks enabled — tracing active",
-          "Open settings.json",
-          "Open Hook Script",
-        );
-        if (action === "Open settings.json") {
-          const settingsUri = vscode.Uri.file(path.join(os.homedir(), ".claude", "settings.json"));
-          await vscode.window.showTextDocument(settingsUri);
-        } else if (action === "Open Hook Script") {
-          const scriptUri = vscode.Uri.file(path.join(os.homedir(), ".claude", "hooks", "langfuse_hook.py"));
-          await vscode.window.showTextDocument(scriptUri);
-        }
+        hookManager.enableHooks();
+        provider.refresh();
+        flashStatus("Hooks enabled — tracing active");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
       }
@@ -285,21 +263,9 @@ export function activate(context: vscode.ExtensionContext) {
     // Disable hooks
     vscode.commands.registerCommand("agentTracing.disableHook", async () => {
       try {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-          },
-          async (progress) => {
-            progress.report({ message: "Removing hook entry from ~/.claude/settings.json" });
-            hookManager.disableHooks();
-            provider.refresh();
-          },
-        );
-        void vscode.window.showWarningMessage(
-          "Hooks are disabled — traces will not flow until you enable hooks again.",
-        );
+        hookManager.disableHooks();
         provider.refresh();
+        flashStatus("Hooks disabled");
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to disable hooks: ${e.message}`);
       }
@@ -364,7 +330,15 @@ export function activate(context: vscode.ExtensionContext) {
       // 4. Store and connect
       await langfuse.connectExternal(publicKey.trim(), secretKey.trim(), host.trim());
 
-      // 5. Install hooks pointing to the external instance
+      // 5. Validate keys (non-blocking warning if they fail)
+      const keysValid = await langfuse.validateKeys();
+      if (!keysValid) {
+        vscode.window.showWarningMessage(
+          "Connected, but API key validation failed. Traces may not be recorded. Check your keys in Langfuse project settings.",
+        );
+      }
+
+      // 6. Install hooks pointing to the external instance
       await hookManager.installAll();
       provider.refresh();
       flashStatus("Connected to external Langfuse");
@@ -416,7 +390,9 @@ export function activate(context: vscode.ExtensionContext) {
         await hookManager.installAll();
         provider.refresh();
       })
-      .catch(() => {});
+      .catch((e: any) => {
+        output.warn(`Auto-start failed: ${e.message}`);
+      });
   } else {
     checkAndNudge(context, langfuse, hookManager, provider);
   }
@@ -469,6 +445,26 @@ async function checkAndNudge(
   } catch {
     // best-effort nudge
   }
+}
+
+/** Show a QuickPick-based modal confirmation to ensure non-native/consistent UI. */
+async function confirmModal(
+  title: string,
+  detail: string,
+  confirmLabel: string,
+): Promise<boolean> {
+  const result = await vscode.window.showQuickPick(
+    [
+      { label: confirmLabel, detail, description: "Proceed" },
+      { label: "Cancel", description: "Abort" },
+    ],
+    {
+      title,
+      placeHolder: "Select an action to proceed",
+      ignoreFocusOut: true,
+    },
+  );
+  return result?.label === confirmLabel;
 }
 
 export function deactivate() {}
