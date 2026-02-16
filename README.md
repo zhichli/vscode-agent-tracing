@@ -154,6 +154,10 @@ curl -s http://localhost:3000/api/public/health
 - [ ] Multi-workspace support
 - [ ] Windows native path support
 
+## Telemetry
+
+This extension collects anonymous usage telemetry via Azure Application Insights to improve the product. No file paths, project names, trace content, API keys, or hostnames are ever collected. Telemetry automatically respects your VS Code `telemetry.telemetryLevel` setting — set it to `"off"` to disable all telemetry.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture overview, and contribution guidelines.
