@@ -110,6 +110,21 @@ def debug(message: str, agent: str = "unknown", session_id: str = "") -> None:
         log("DEBUG", message, agent, session_id)
 
 
+def trace_name(user_text: str, turn_num: int, max_len: int = 80) -> str:
+    """Derive a short, readable trace name from the user's message.
+
+    Takes the first non-empty line, strips leading markdown/quotes,
+    and truncates to *max_len* characters. Falls back to 'Turn N'.
+    """
+    for raw_line in user_text.split("\n"):
+        line = raw_line.strip().lstrip(">#- ").strip()
+        if line:
+            if len(line) > max_len:
+                return line[:max_len].rstrip() + "\u2026"
+            return line
+    return f"Turn {turn_num}"
+
+
 def output_and_exit(data: dict | None = None, code: int = 0) -> None:
     print(json.dumps(data or {}), flush=True)
     sys.exit(code)
@@ -290,8 +305,10 @@ def create_vscode_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
         if session_info.get(key):
             metadata[key] = session_info[key]
 
+    name = trace_name(user_text, turn_num)
+
     with langfuse.start_as_current_span(
-        name=f"Turn {turn_num}",
+        name=name,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
@@ -477,14 +494,24 @@ def group_claude_turns(messages: list[dict]) -> list[dict]:
 
     for msg in messages:
         if is_user(msg):
-            if current is not None:
-                turns.append(current)
-            current = {
-                "user_text": get_text_content(msg),
-                "assistant_messages": [],
-                "tool_calls": [],
-                "tool_results": {},
-            }
+            # Tool-result "user" messages are continuations, not new turns.
+            # In the Claude API, tool results come back as role:"user" with
+            # content items of type "tool_result".
+            tool_results = get_tool_results(msg)
+            if tool_results and current is not None:
+                for tr in tool_results:
+                    tool_use_id = tr.get("tool_use_id", "")
+                    if tool_use_id:
+                        current["tool_results"][tool_use_id] = tr
+            else:
+                if current is not None:
+                    turns.append(current)
+                current = {
+                    "user_text": get_text_content(msg),
+                    "assistant_messages": [],
+                    "tool_calls": [],
+                    "tool_results": {},
+                }
         elif is_assistant(msg) and current is not None:
             current["assistant_messages"].append(msg)
             for tc in get_tool_calls(msg):
@@ -511,8 +538,10 @@ def create_claude_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn
         "session_id": session_id,
     }
 
+    name = trace_name(user_text, turn_num)
+
     with langfuse.start_as_current_span(
-        name=f"Turn {turn_num}",
+        name=name,
         input={"role": "user", "content": user_text},
         metadata=metadata,
     ) as trace_span:
