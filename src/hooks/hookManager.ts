@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { LangfuseManager } from "../stacks/langfuseManager";
+import { JaegerManager } from "../stacks/jaegerManager";
 
 /**
  * Manages the shared hook script and a single hook entry in
@@ -20,6 +21,7 @@ export class HookManager {
   constructor(
     private context: vscode.ExtensionContext,
     private langfuse: LangfuseManager,
+    private jaeger: JaegerManager,
     private output: vscode.LogOutputChannel,
   ) {}
 
@@ -98,10 +100,25 @@ export class HookManager {
     };
 
     // Merge with any user-configured additional exporters
-    const additionalExporters: Array<{ name: string; endpoint: string; headers?: Record<string, string> }> =
+    let additionalExporters: Array<{ name: string; endpoint: string; headers?: Record<string, string> }> =
       vscode.workspace
         .getConfiguration("agentTracing")
         .get<Array<{ name: string; endpoint: string; headers?: Record<string, string> }>>("additionalExporters", []);
+
+    // Auto-include Jaeger exporter if managed Jaeger is configured
+    if (this.jaeger.isConfigured) {
+      const jaegerExporter = {
+        name: "jaeger",
+        endpoint: this.jaeger.otlpEndpoint,
+      };
+      // Only add if not already in additionalExporters
+      const alreadyHasJaeger = additionalExporters.some(
+        (e) => e.name === "jaeger" || e.endpoint === jaegerExporter.endpoint,
+      );
+      if (!alreadyHasJaeger) {
+        additionalExporters = [...additionalExporters, jaegerExporter];
+      }
+    }
 
     const config = {
       // Legacy fields — backward compat for older hook versions

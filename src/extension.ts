@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { LangfuseManager } from "./stacks/langfuseManager";
+import { JaegerManager } from "./stacks/jaegerManager";
 import { HookManager } from "./hooks/hookManager";
 import { HookLogWatcher } from "./hooks/hookLogWatcher";
 import { TracingSolutionsTreeProvider } from "./views/tracingSolutionsTreeProvider";
@@ -17,10 +18,12 @@ export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Agent Tracing", { log: true });
   initTelemetry(context);
   const langfuse = new LangfuseManager(context, output);
-  const hookManager = new HookManager(context, langfuse, output);
+  const jaeger = new JaegerManager(context, output);
+  const hookManager = new HookManager(context, langfuse, jaeger, output);
 
   const provider = new TracingSolutionsTreeProvider(
     langfuse,
+    jaeger,
     hookManager,
     context.extensionUri,
   );
@@ -392,6 +395,103 @@ export function activate(context: vscode.ExtensionContext) {
       provider.refresh();
       flashStatus("Disconnected from Langfuse");
       sendEvent("disconnect");
+    }),
+
+    // --- Jaeger commands ---
+
+    // Jaeger: Setup (pull image + run container)
+    vscode.commands.registerCommand("agentTracing.jaeger.setup", async () => {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, cancellable: false },
+        async (progress) => {
+          try {
+            await jaeger.setup((msg) => progress.report({ message: msg }));
+            // Add Jaeger exporter to hook config and re-enable
+            hookManager.enableHooks();
+            provider.refresh();
+            await jaeger.openDashboard();
+            flashStatus("Jaeger started");
+            sendEvent("jaeger/setup");
+          } catch (e: any) {
+            vscode.window.showErrorMessage(`Jaeger setup failed: ${e.message}`);
+            sendError("jaeger/setup-failed", { error: e.message });
+          }
+        },
+      );
+    }),
+
+    // Jaeger: Start (existing container)
+    vscode.commands.registerCommand("agentTracing.jaeger.start", async () => {
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, cancellable: false },
+          async (progress) => {
+            await jaeger.start((msg) => progress.report({ message: msg }));
+            const start = Date.now();
+            while (Date.now() - start < 15_000) {
+              if (await jaeger.isRunning()) break;
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+            provider.refresh();
+          },
+        );
+        flashStatus("Jaeger started");
+        sendEvent("jaeger/start");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to start Jaeger: ${e.message}`);
+      }
+    }),
+
+    // Jaeger: Stop
+    vscode.commands.registerCommand("agentTracing.jaeger.stop", async () => {
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, cancellable: false },
+          async (progress) => {
+            await jaeger.stop((msg) => progress.report({ message: msg }));
+            provider.refresh();
+          },
+        );
+        flashStatus("Jaeger stopped");
+        sendEvent("jaeger/stop");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to stop Jaeger: ${e.message}`);
+      }
+    }),
+
+    // Jaeger: Delete (remove container)
+    vscode.commands.registerCommand("agentTracing.jaeger.purge", async () => {
+      const confirm = await confirmModal(
+        "This will remove the Jaeger container and all its data",
+        "The Jaeger container and its in-memory trace data will be deleted.",
+        "Delete",
+      );
+      if (!confirm) return;
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, cancellable: false },
+          async (progress) => {
+            await jaeger.purge((msg) => progress.report({ message: msg }));
+            provider.refresh();
+          },
+        );
+        flashStatus("Jaeger removed");
+        sendEvent("jaeger/purge");
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to remove Jaeger: ${e.message}`);
+      }
+    }),
+
+    // Jaeger: Open dashboard (integrated)
+    vscode.commands.registerCommand("agentTracing.jaeger.openDashboard", async () => {
+      sendEvent("jaeger/dashboard", { target: "integrated" });
+      await jaeger.openDashboard();
+    }),
+
+    // Jaeger: Open dashboard (external)
+    vscode.commands.registerCommand("agentTracing.jaeger.openDashboardExternal", async () => {
+      sendEvent("jaeger/dashboard", { target: "external" });
+      await jaeger.openDashboardExternal();
     }),
   );
 

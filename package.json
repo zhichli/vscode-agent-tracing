@@ -160,6 +160,48 @@
         "title": "Show Hook Log",
         "shortTitle": "Open the hook script log for debugging",
         "icon": "$(output)"
+      },
+      {
+        "command": "agentTracing.jaeger.setup",
+        "category": "Agent Tracing",
+        "title": "Start Jaeger",
+        "shortTitle": "Pull and start a Jaeger container",
+        "icon": "$(play)"
+      },
+      {
+        "command": "agentTracing.jaeger.start",
+        "category": "Agent Tracing",
+        "title": "Start Jaeger",
+        "shortTitle": "Start existing Jaeger container",
+        "icon": "$(play)"
+      },
+      {
+        "command": "agentTracing.jaeger.stop",
+        "category": "Agent Tracing",
+        "title": "Stop Jaeger",
+        "shortTitle": "Stop the Jaeger container",
+        "icon": "$(primitive-square)"
+      },
+      {
+        "command": "agentTracing.jaeger.purge",
+        "category": "Agent Tracing",
+        "title": "Delete Jaeger",
+        "shortTitle": "Remove Jaeger container and data",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentTracing.jaeger.openDashboard",
+        "category": "Agent Tracing",
+        "title": "Open Jaeger Dashboard",
+        "shortTitle": "Open Jaeger UI in VS Code",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "agentTracing.jaeger.openDashboardExternal",
+        "category": "Agent Tracing",
+        "title": "Open Jaeger Dashboard (External Browser)",
+        "shortTitle": "Open Jaeger UI in system browser",
+        "icon": "$(link-external)"
       }
     ],
     "menus": {
@@ -260,6 +302,41 @@
           "command": "agentTracing.enableHook",
           "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-off",
           "group": "langfuse@5"
+        },
+        {
+          "command": "agentTracing.jaeger.setup",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-not-configured",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.jaeger.setup",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-docker-not-found",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.jaeger.openDashboard",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-running",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentTracing.jaeger.stop",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-running",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentTracing.jaeger.openDashboardExternal",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-running",
+          "group": "jaeger@1"
+        },
+        {
+          "command": "agentTracing.jaeger.purge",
+          "when": "view == agentTracing.solutions && viewItem =~ /^jaeger-(running|stopped)/",
+          "group": "jaeger-danger@1"
+        },
+        {
+          "command": "agentTracing.jaeger.start",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-stopped",
+          "group": "inline@1"
         }
       ]
     },
@@ -299,6 +376,16 @@
               }
             }
           }
+        },
+        "agentTracing.jaeger.uiPort": {
+          "type": "number",
+          "default": 16686,
+          "description": "Port for the Jaeger UI (localhost)"
+        },
+        "agentTracing.jaeger.otlpPort": {
+          "type": "number",
+          "default": 4318,
+          "description": "Port for the Jaeger OTLP HTTP receiver (localhost)"
         }
       }
     }
