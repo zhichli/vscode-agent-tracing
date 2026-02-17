@@ -25,6 +25,26 @@
 | 2.4 | **Auto-start error logging** — replace `.catch(() => {})` with `.catch(e => output.warn(...))` | `extension.ts` | DONE |
 | 2.5 | **Remove duplicate `provider.refresh()`** in `stopStack` command | `extension.ts` | DONE |
 | 2.6 | **Smaller Docker subnet** — change hardcoded `/16` to `/24` to reduce conflict risk | `langfuseManager.ts` | DONE |
+| 2.7 | **Dashboard tab reuse** — `openDashboard()` checks `tabGroups` for an existing Langfuse browser tab and focuses it instead of opening a duplicate | `langfuseManager.ts` | DONE |
+| 2.8 | **Dashboard auto-refresh** — new traces appear without manual page reload (see proposal below) | `langfuseManager.ts` | TODO |
+
+#### 2.8 Auto-Refresh Proposal
+
+**Problem:** After a hook fires, the user must manually click the Langfuse refresh button (or set auto-refresh via the UI dropdown) to see new traces.
+
+**Approach — URL query parameter:**
+Langfuse's traces page reads `?refresh=30s` (or similar) from the URL to set the auto-refresh interval. Append `?refresh=30s` to the `tracesUrl` we pass to `simpleBrowser.api.open`. No extra infrastructure needed.
+
+If Langfuse doesn't support a URL param for this, the fallback approaches are:
+
+| Option | Mechanism | Pros | Cons |
+|--------|-----------|------|------|
+| **A. URL query param** | Append `?refresh=30s` to traces URL | Zero infra, one-line change | Only works if Langfuse supports it (needs verification) |
+| **B. Nginx sub_filter** | Add nginx reverse-proxy container to Docker Compose that injects a `<script>` setting `sessionStorage['tableRefreshInterval']` | Works regardless of Langfuse URL support; users can still override | Adds a container; increases compose complexity |
+| **C. PostMessage into webview** | After opening Simple Browser, send a JS postMessage to seed sessionStorage | No extra container | Simple Browser sandboxes scripts; may not work reliably |
+| **D. Do nothing** | Document how to set auto-refresh manually | Simplest | Poor UX for first-time users |
+
+**Recommendation:** Verify option A first (check Langfuse source for URL-driven refresh). Fall back to B if needed.
 
 ### Phase 3: Documentation Alignment
 

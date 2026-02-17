@@ -289,7 +289,33 @@ export class LangfuseManager {
   }
 
   async openDashboard(): Promise<void> {
-    // Open traces page directly in the VS Code browser pane.
+    // If an Integrated Browser tab for our Langfuse instance already exists,
+    // focus it instead of opening a duplicate.
+    //
+    // Integrated Browser tabs have `tab.input === undefined` (BrowserEditorInput
+    // doesn't map to any TabInput* class in the extension API), which
+    // distinguishes them from regular file tabs (TabInputText, etc.).
+    // We combine that with a label check for Langfuse's HTML <title>.
+    for (const group of vscode.window.tabGroups.all) {
+      const tabIndex = group.tabs.findIndex(
+        (t) => t.input === undefined && t.label.toLowerCase().includes("langfuse"),
+      );
+      if (tabIndex >= 0) {
+        // Focus the editor group, then activate the tab by index.
+        if (group.viewColumn !== undefined) {
+          await vscode.commands.executeCommand(
+            `workbench.action.focus${this.ordinalGroup(group.viewColumn)}EditorGroup`,
+          );
+        }
+        await vscode.commands.executeCommand(
+          "workbench.action.openEditorAtIndex",
+          tabIndex,
+        );
+        return;
+      }
+    }
+
+    // No existing tab — open fresh.
     await vscode.commands.executeCommand(
       "simpleBrowser.api.open",
       vscode.Uri.parse(this.tracesUrl),
@@ -298,6 +324,21 @@ export class LangfuseManager {
         preserveFocus: false,
       },
     );
+  }
+
+  /** Map a ViewColumn number to the ordinal word used by focus commands. */
+  private ordinalGroup(viewColumn: vscode.ViewColumn): string {
+    const names: Record<number, string> = {
+      1: "First",
+      2: "Second",
+      3: "Third",
+      4: "Fourth",
+      5: "Fifth",
+      6: "Sixth",
+      7: "Seventh",
+      8: "Eighth",
+    };
+    return names[viewColumn] ?? "First";
   }
 
   async openDashboardExternal(): Promise<void> {
