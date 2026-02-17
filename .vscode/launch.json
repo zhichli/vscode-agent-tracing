@@ -5,9 +5,9 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}"
+      "args": ["--extensionDevelopmentPath=${workspaceFolder:vscode-agent-tracing}"],
+      "outFiles": ["${workspaceFolder:vscode-agent-tracing}/dist/**/*.js"],
+      "preLaunchTask": "watch"
     }
   ]
 }
