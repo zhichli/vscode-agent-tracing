@@ -31,12 +31,12 @@ Benefits:
 
 | # | Task | Files | Status |
 |---|------|-------|--------|
-| 1 | **Rewrite hook to OTLP JSON** — Replace `langfuse` SDK with zero-dep OTLP JSON construction + `urllib` HTTP POST. Map turns to OTel spans with Langfuse attribute conventions. Backward-compatible config fallback. | `langfuse_hook.py` | TODO |
-| 2 | **Update config format with exporters** — `hookManager.ts` writes `exporters` array in `.langfuse_config.json` with OTLP endpoint + auth headers. Old fields kept for backward compat. | `hookManager.ts` | TODO |
-| 3 | **Remove pip install from setup** — Delete `ensurePythonLangfuse()` from `langfuseManager.ts` and remove the "Ensuring Python langfuse package" step from `setup()`. | `langfuseManager.ts` | TODO |
-| 4 | **Add `additionalExporters` VS Code setting** — Let users configure extra OTLP endpoints (Jaeger, etc.) via VS Code settings. Extension merges these with Langfuse exporter in config. | `package.json`, `hookManager.ts` | TODO |
-| 5 | **Add Jaeger example in README** — Document how to add Jaeger as a second backend (docker run + one setting). Demonstrates multi-backend vision. | `README.md` | TODO |
-| 6 | **Build check + push** | — | TODO |
+| 1 | **Rewrite hook to OTLP JSON** — Replace `langfuse` SDK with zero-dep OTLP JSON construction + `urllib` HTTP POST. Map turns to OTel spans with Langfuse attribute conventions. Backward-compatible config fallback. | `langfuse_hook.py` | DONE |
+| 2 | **Update config format with exporters** — `hookManager.ts` writes `exporters` array in `.langfuse_config.json` with OTLP endpoint + auth headers. Old fields kept for backward compat. | `hookManager.ts` | DONE |
+| 3 | **Remove pip install from setup** — Delete `ensurePythonLangfuse()` from `langfuseManager.ts` and remove the "Ensuring Python langfuse package" step from `setup()`. | `langfuseManager.ts` | DONE |
+| 4 | **Add `additionalExporters` VS Code setting** — Let users configure extra OTLP endpoints (Jaeger, etc.) via VS Code settings. Extension merges these with Langfuse exporter in config. | `package.json`, `hookManager.ts` | DONE |
+| 5 | **Add Jaeger example in README** — Document how to add Jaeger as a second backend (docker run + one setting). Demonstrates multi-backend vision. | `README.md` | DONE |
+| 6 | **Build check + push** | — | DONE |
 
 ---
 
@@ -125,3 +125,9 @@ Root span (turn)
 ## Hiccups & Notes
 
 _(Updated during execution)_
+
+- **No hiccups.** Clean execution across all 6 tasks.
+- **Key discovery:** Langfuse's `OtelIngestionProcessor.convertNanoTimestampToISO()` handles string, number, and `{high, low}` formats — standard OTLP JSON string timestamps work perfectly.
+- **Key discovery:** Langfuse's `parseId()` accepts hex strings directly (`typeof data === "string" ? data`) — no need for Buffer encoding.
+- **Attribute format:** OTLP attribute values must use wrappers (`{stringValue: "..."}`, `{intValue: "N"}`, etc.) — Langfuse's `convertValueToPlainJavascript()` unwraps them server-side.
+- **Zero-dep win:** Removing the `pip install langfuse` step eliminates one of the most common setup failure points (pip permission errors, venv conflicts, proxy issues).
