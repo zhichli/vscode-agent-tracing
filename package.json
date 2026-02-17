@@ -275,6 +275,30 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically start Langfuse when VS Code opens"
+        },
+        "agentTracing.additionalExporters": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Additional OTLP trace exporters. Each entry sends traces to an OTLP-compatible backend alongside Langfuse.\n\nExample for Jaeger:\n```json\n[{ \"name\": \"jaeger\", \"endpoint\": \"http://localhost:4318/v1/traces\" }]\n```",
+          "items": {
+            "type": "object",
+            "required": ["name", "endpoint"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name for this exporter (e.g. 'jaeger', 'honeycomb')"
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "OTLP HTTP/JSON endpoint URL (e.g. http://localhost:4318/v1/traces)"
+              },
+              "headers": {
+                "type": "object",
+                "description": "Additional HTTP headers (e.g. Authorization, api-key)",
+                "additionalProperties": { "type": "string" }
+              }
+            }
+          }
         }
       }
     }
