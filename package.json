@@ -2,7 +2,7 @@
   "name": "vscode-agent-tracing",
   "displayName": "Agent Tracing",
   "description": "Local-first observability for AI coding agents. One-click setup for tracing VS Code Copilot and Claude sessions with pluggable backends like Langfuse.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "zhichli",
   "license": "MIT",
   "repository": {

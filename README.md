@@ -23,6 +23,8 @@ One-click tracing setup for VS Code Copilot Chat and Claude with Langfuse — no
 
 > Requires **Docker** (for the Langfuse stack) and **Python 3** (for hook scripts; `langfuse` pip package is auto-installed).
 
+> **Tip — auto-refresh:** The Langfuse traces table defaults to manual refresh. To see new traces automatically, click the **▾** dropdown next to the refresh button in the traces toolbar and select an interval (e.g. **30s**).
+
 ## How It Works
 
 ```
@@ -68,7 +70,7 @@ TRACING SOLUTIONS                                [↻]
 | **Running + hooks off** | 🔌 Enable, 📄 Dashboard, ⏹ Stop | Open External, Login Info, Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
 | **Stopped + hooks on** | ▶ Start | Stack Version, Disable Hooks, Show Hook Log, Recreate, Delete |
 | **Stopped + hooks off** | ▶ Start | Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
-| **Running (external)** | 📄 Dashboard, ⏹ Disconnect | Open External, Disable/Enable Hooks, Show Hook Log |
+| **Running (external)** | 📄 Dashboard, ⏹ Disconnect | Open External, Disconnect, Disable/Enable Hooks, Show Hook Log |
 | **Docker not found** | ▶ Setup | — |
 
 ## File Layout
@@ -156,7 +158,7 @@ curl -s http://localhost:3000/api/public/health
 
 ## Telemetry
 
-This extension collects anonymous usage telemetry via Azure Application Insights to improve the product. No file paths, project names, trace content, API keys, or hostnames are ever collected. Telemetry automatically respects your VS Code `telemetry.telemetryLevel` setting — set it to `"off"` to disable all telemetry.
+This extension includes telemetry infrastructure via `@vscode/extension-telemetry` (Azure Application Insights). **Telemetry is not currently active** — no data is collected. When enabled in a future release, it will respect your VS Code `telemetry.telemetryLevel` setting and never collect file paths, project names, trace content, API keys, or hostnames.
 
 ## Contributing
 

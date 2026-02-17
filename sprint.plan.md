@@ -26,25 +26,25 @@
 | 2.5 | **Remove duplicate `provider.refresh()`** in `stopStack` command | `extension.ts` | DONE |
 | 2.6 | **Smaller Docker subnet** — change hardcoded `/16` to `/24` to reduce conflict risk | `langfuseManager.ts` | DONE |
 | 2.7 | **Dashboard tab reuse** — `openDashboard()` checks `tabGroups` for an existing Langfuse browser tab and focuses it instead of opening a duplicate | `langfuseManager.ts` | DONE |
-| 2.8 | **Dashboard auto-refresh** — new traces appear without manual page reload (see proposal below) | `langfuseManager.ts` | TODO |
+| 2.8 | **Dashboard auto-refresh** — documented manual workaround (Langfuse refresh dropdown); URL param approach deferred pending upstream PR | `README.md` | DONE (documented) |
 
-#### 2.8 Auto-Refresh Proposal
+#### 2.8 Auto-Refresh — Research & Resolution
 
 **Problem:** After a hook fires, the user must manually click the Langfuse refresh button (or set auto-refresh via the UI dropdown) to see new traces.
 
-**Approach — URL query parameter:**
-Langfuse's traces page reads `?refresh=30s` (or similar) from the URL to set the auto-refresh interval. Append `?refresh=30s` to the `tracesUrl` we pass to `simpleBrowser.api.open`. No extra infrastructure needed.
+**Research findings (from Langfuse source):**
+- Refresh is controlled by `sessionStorage` key `tableRefreshInterval-${projectId}` — **no URL query param** exists
+- Interval options: Off (default), 30s, 1m, 5m, 15m — set via a dropdown button in the traces toolbar
+- Mechanism: `setInterval` + tick counter that recomputes date ranges and invalidates tRPC queries
 
-If Langfuse doesn't support a URL param for this, the fallback approaches are:
+| Option | Mechanism | Verdict |
+|--------|-----------|---------|
+| **A. URL query param** | Append `?refresh=30s` to traces URL | **Dead** — Langfuse has no URL param for this |
+| **B. Add URL param to Langfuse** | ~5-line `useEffect` in `TracesTable` to read `?refreshInterval=30000` on mount | Best long-term (upstream PR) — deferred |
+| **C. Nginx sub_filter** | Inject `<script>` via reverse proxy | Too heavy for this use case |
+| **D. Document it** | Tip in README explaining the dropdown | **Shipped** — good enough for v0.1.0 |
 
-| Option | Mechanism | Pros | Cons |
-|--------|-----------|------|------|
-| **A. URL query param** | Append `?refresh=30s` to traces URL | Zero infra, one-line change | Only works if Langfuse supports it (needs verification) |
-| **B. Nginx sub_filter** | Add nginx reverse-proxy container to Docker Compose that injects a `<script>` setting `sessionStorage['tableRefreshInterval']` | Works regardless of Langfuse URL support; users can still override | Adds a container; increases compose complexity |
-| **C. PostMessage into webview** | After opening Simple Browser, send a JS postMessage to seed sessionStorage | No extra container | Simple Browser sandboxes scripts; may not work reliably |
-| **D. Do nothing** | Document how to set auto-refresh manually | Simplest | Poor UX for first-time users |
-
-**Recommendation:** Verify option A first (check Langfuse source for URL-driven refresh). Fall back to B if needed.
+**Resolution:** Option D shipped. Added a Quick Start tip explaining how to enable auto-refresh via the Langfuse traces toolbar dropdown. Option B remains a candidate for a future Langfuse PR.
 
 ### Phase 3: Documentation Alignment
 
