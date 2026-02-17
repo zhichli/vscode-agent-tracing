@@ -9,8 +9,8 @@ const JAEGER_DEFAULTS = {
   otlpPort: 4318,
   /** Docker image. */
   image: "docker.io/jaegertracing/jaeger",
-  /** Pinned image tag. */
-  tag: "2",
+  /** Pinned image tag — use specific version per https://www.jaegertracing.io/docs/2.15/getting-started/ */
+  tag: "latest",
   /** Docker container name managed by this extension. */
   containerName: "agent-tracing-jaeger",
   /** Label used to identify our managed container. */
@@ -100,6 +100,8 @@ export class JaegerManager {
     // Fresh run
     step("Starting Jaeger all-in-one container…");
     const image = `${JAEGER_DEFAULTS.image}:${JAEGER_DEFAULTS.tag}`;
+    // Jaeger v2 enables OTLP receiver on 4317 (gRPC) and 4318 (HTTP) by default.
+    // No extra flags needed — see https://www.jaegertracing.io/docs/2.15/getting-started/
     const cmd = [
       "docker run -d",
       `--name ${name}`,
@@ -108,7 +110,6 @@ export class JaegerManager {
       `-p ${this.uiPort}:16686`,
       `-p ${this.otlpPort}:4318`,
       image,
-      `--set receivers.otlp.protocols.http.endpoint=0.0.0.0:4318`,
     ].join(" ");
 
     await execStreaming(cmd, {
