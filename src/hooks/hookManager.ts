@@ -85,15 +85,36 @@ export class HookManager {
 
   private writeLangfuseConfig(): void {
     const logDir = path.join(this.context.globalStorageUri.fsPath, "logs");
+
+    // Build the Langfuse OTLP exporter entry
+    const pk = this.langfuse.publicKey;
+    const sk = this.langfuse.secretKey;
+    const host = this.langfuse.dashboardUrl;
+    const auth = Buffer.from(`${pk}:${sk}`).toString("base64");
+    const langfuseExporter = {
+      name: "langfuse",
+      endpoint: `${host.replace(/\/$/, "")}/api/public/otel/v1/traces`,
+      headers: { Authorization: `Basic ${auth}` },
+    };
+
+    // Merge with any user-configured additional exporters
+    const additionalExporters: Array<{ name: string; endpoint: string; headers?: Record<string, string> }> =
+      vscode.workspace
+        .getConfiguration("agentTracing")
+        .get<Array<{ name: string; endpoint: string; headers?: Record<string, string> }>>("additionalExporters", []);
+
     const config = {
-      public_key: this.langfuse.publicKey,
-      secret_key: this.langfuse.secretKey,
-      host: this.langfuse.dashboardUrl,
+      // Legacy fields — backward compat for older hook versions
+      public_key: pk,
+      secret_key: sk,
+      host,
       log_dir: logDir,
+      // New: multi-backend OTLP exporters
+      exporters: [langfuseExporter, ...additionalExporters],
     };
     fs.mkdirSync(path.dirname(this.langfuseConfigPath), { recursive: true });
     fs.writeFileSync(this.langfuseConfigPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
-    this.output.debug(`Wrote .langfuse_config.json → ${this.langfuseConfigPath}`);
+    this.output.debug(`Wrote .langfuse_config.json → ${this.langfuseConfigPath} (${config.exporters.length} exporter(s))`);
   }
 
   // ---- single hook entry (serves both VS Code + Claude) ----
