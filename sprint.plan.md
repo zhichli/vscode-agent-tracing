@@ -38,6 +38,17 @@ Benefits:
 | 5 | **Add Jaeger example in README** — Document how to add Jaeger as a second backend (docker run + one setting). Demonstrates multi-backend vision. | `README.md` | DONE |
 | 6 | **Build check + push** | — | DONE |
 
+### Phase 2: Jaeger Sidebar UI (first-class backend node)
+
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 7 | **Create JaegerManager** — Docker lifecycle for Jaeger all-in-one container (start/stop/purge/health). | `jaegerManager.ts` | DONE |
+| 8 | **Create Jaeger running icon** — Teal dot SVG matching Langfuse style. | `jaeger-running.svg` | DONE |
+| 9 | **Refactor tree to show Jaeger node** — `TracingSolutionsTreeProvider` returns both Langfuse + Jaeger as peer nodes. | `tracingSolutionsTreeProvider.ts` | DONE |
+| 10 | **Register Jaeger commands + menus** — setup, start, stop, purge, open dashboard. Context menus for inline and right-click. | `extension.ts`, `package.json` | DONE |
+| 11 | **Wire HookManager to JaegerManager** — Auto-include Jaeger OTLP exporter when managed Jaeger is configured. | `hookManager.ts` | DONE |
+| 12 | **Build check + push** | — | DONE |
+
 ---
 
 ## Config Format Evolution
@@ -131,3 +142,5 @@ _(Updated during execution)_
 - **Key discovery:** Langfuse's `parseId()` accepts hex strings directly (`typeof data === "string" ? data`) — no need for Buffer encoding.
 - **Attribute format:** OTLP attribute values must use wrappers (`{stringValue: "..."}`, `{intValue: "N"}`, etc.) — Langfuse's `convertValueToPlainJavascript()` unwraps them server-side.
 - **Zero-dep win:** Removing the `pip install langfuse` step eliminates one of the most common setup failure points (pip permission errors, venv conflicts, proxy issues).
+- **Jaeger simplicity:** Jaeger all-in-one is a single container with zero auth — much simpler than Langfuse's 6-container stack. No compose file needed, just `docker run`.
+- **Auto-exporter wiring:** When managed Jaeger is configured, `HookManager.writeLangfuseConfig()` auto-includes the Jaeger OTLP endpoint in the `exporters` array — no manual `additionalExporters` setting needed.
