@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Agent Tracing — Unified Langfuse tracing hook.
+Agent Tracing — Zero-dependency OTLP tracing hook.
+
+Emits standard OpenTelemetry (OTLP JSON) traces to any configured backend
+(Langfuse, Jaeger, Honeycomb, Grafana Tempo, Datadog, etc.).
 
 Shared by both VS Code Copilot Chat and Claude. Detects the calling
 agent at runtime via stdin format:
@@ -8,15 +11,22 @@ agent at runtime via stdin format:
   - Claude: stdin is empty or has no hookEventName; reads latest transcript from ~/.claude/projects/
 
 Install: managed automatically by the Agent Tracing VS Code extension.
+
+Dependencies: Python 3.8+ stdlib only — no pip packages required.
 """
 
+import base64
 import json
 import os
 import signal
 import sys
+import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------------------
 # Stdin read timeout (seconds) — prevents zombie processes if an agent
@@ -41,36 +51,58 @@ def load_config() -> dict:
 
 _config = load_config()
 
-_env_pk = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
-_env_sk = os.environ.get("LANGFUSE_SECRET_KEY", "")
-_env_host = os.environ.get("LANGFUSE_HOST", "")
-
-LANGFUSE_PUBLIC_KEY = _env_pk or _config.get("public_key", "")
-LANGFUSE_SECRET_KEY = _env_sk or _config.get("secret_key", "")
-LANGFUSE_HOST = _env_host or _config.get("host", "http://localhost:3000")
-KEY_SOURCE = "env" if _env_pk else ("config" if _config.get("public_key") else "none")
 LOG_DIR = _config.get("log_dir", "")
 DEBUG = os.environ.get("CC_LANGFUSE_DEBUG", "").lower() == "true"
 
-# Agent environment names for Langfuse (used as tracing environments)
+# Agent environment names (used as tracing environments / service attributes)
 AGENT_ENVIRONMENTS = {
     "github-copilot-chat": "github-copilot-chat",
     "claude": "claude",
 }
 
-try:
-    from langfuse import Langfuse
-except ImportError:
-    print(json.dumps({}), flush=True)
-    sys.exit(0)
+# Scope name for OTel instrumentation
+OTEL_SCOPE_NAME = "agent-tracing-hook"
+OTEL_SCOPE_VERSION = "0.2.0"
+OTEL_SERVICE_NAME = "agent-tracing"
+
+# HTTP export timeout (seconds per exporter)
+EXPORT_TIMEOUT_SEC = 10
+
+
+# ---------------------------------------------------------------------------
+# Exporter resolution — reads `exporters` from config, falls back to legacy
+# ---------------------------------------------------------------------------
+
+def build_exporters(config: dict) -> List[dict]:
+    """Build the list of OTLP exporters from config.
+
+    Priority:
+      1. config["exporters"] array (new multi-backend format)
+      2. Legacy: construct a Langfuse exporter from env vars / config fields
+    """
+    if config.get("exporters"):
+        return config["exporters"]
+
+    # Legacy fallback — construct Langfuse exporter from old config/env
+    pk = os.environ.get("LANGFUSE_PUBLIC_KEY", "") or config.get("public_key", "")
+    sk = os.environ.get("LANGFUSE_SECRET_KEY", "") or config.get("secret_key", "")
+    host = os.environ.get("LANGFUSE_HOST", "") or config.get("host", "http://localhost:3000")
+
+    if not pk or not sk:
+        return []
+
+    auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
+    return [
+        {
+            "name": "langfuse",
+            "endpoint": f"{host.rstrip('/')}/api/public/otel/v1/traces",
+            "headers": {"Authorization": f"Basic {auth}"},
+        }
+    ]
 
 
 # ---------------------------------------------------------------------------
 # Logging
-# Logging
-#
-# Single destination: <log_dir>/hook.log (append-only, rotation managed by
-# the VS Code extension). Plus stderr when CC_LANGFUSE_DEBUG=true.
 # ---------------------------------------------------------------------------
 
 def _log_base() -> Path:
@@ -96,10 +128,7 @@ def log(level: str, message: str, agent: str = "unknown", session_id: str = "") 
     ts = now.strftime("%Y-%m-%d %H:%M:%S") + f".{now.microsecond // 1000:03d}"
     tag = f"{agent}/{session_id}" if session_id else agent
     line = f"{ts} [{level}] [{tag}] {message}\n"
-
     _write_line(line)
-
-    # Stderr in debug mode for immediate terminal visibility
     if DEBUG:
         sys.stderr.write(line)
         sys.stderr.flush()
@@ -110,12 +139,152 @@ def debug(message: str, agent: str = "unknown", session_id: str = "") -> None:
         log("DEBUG", message, agent, session_id)
 
 
-def trace_name(user_text: str, turn_num: int, max_len: int = 80) -> str:
-    """Derive a short, readable trace name from the user's message.
+# ---------------------------------------------------------------------------
+# OTLP JSON helpers — build standard OpenTelemetry trace payloads
+# ---------------------------------------------------------------------------
 
-    Takes the first non-empty line, strips leading markdown/quotes,
-    and truncates to *max_len* characters. Falls back to 'Turn N'.
+def generate_trace_id() -> str:
+    """Generate a 32-char hex trace ID (16 bytes)."""
+    return uuid.uuid4().hex
+
+
+def generate_span_id() -> str:
+    """Generate a 16-char hex span ID (8 bytes)."""
+    return uuid.uuid4().hex[:16]
+
+
+def now_ns() -> str:
+    """Current time as nanosecond string (OTLP JSON standard for uint64)."""
+    return str(int(time.time() * 1e9))
+
+
+def ts_to_ns(iso_or_epoch: Any) -> str:
+    """Convert an ISO timestamp string, epoch seconds, or None to nanosecond string."""
+    if not iso_or_epoch:
+        return now_ns()
+    if isinstance(iso_or_epoch, (int, float)):
+        return str(int(iso_or_epoch * 1e9))
+    if isinstance(iso_or_epoch, str):
+        try:
+            # Try ISO format
+            dt = datetime.fromisoformat(iso_or_epoch.replace("Z", "+00:00"))
+            return str(int(dt.timestamp() * 1e9))
+        except ValueError:
+            pass
+    return now_ns()
+
+
+def otlp_attr(key: str, value: Any) -> Optional[dict]:
+    """Create an OTLP attribute entry. Returns None if value is None/empty."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return {"key": key, "value": {"boolValue": value}}
+    if isinstance(value, int):
+        return {"key": key, "value": {"intValue": str(value)}}
+    if isinstance(value, float):
+        return {"key": key, "value": {"doubleValue": value}}
+    if isinstance(value, (dict, list)):
+        return {"key": key, "value": {"stringValue": json.dumps(value)}}
+    s = str(value)
+    if not s:
+        return None
+    return {"key": key, "value": {"stringValue": s}}
+
+
+def make_span(
+    trace_id: str,
+    span_id: str,
+    name: str,
+    start_ns: str,
+    end_ns: str,
+    attributes: Dict[str, Any],
+    parent_span_id: str = "",
+    kind: int = 1,  # SPAN_KIND_INTERNAL
+    status_code: int = 1,  # STATUS_CODE_OK
+) -> dict:
+    """Build an OTLP span dict."""
+    attrs = [a for a in (otlp_attr(k, v) for k, v in attributes.items()) if a is not None]
+    span: Dict[str, Any] = {
+        "traceId": trace_id,
+        "spanId": span_id,
+        "name": name,
+        "kind": kind,
+        "startTimeUnixNano": start_ns,
+        "endTimeUnixNano": end_ns,
+        "attributes": attrs,
+        "status": {"code": status_code},
+    }
+    if parent_span_id:
+        span["parentSpanId"] = parent_span_id
+    return span
+
+
+def make_resource_spans(
+    spans: List[dict],
+    agent: str,
+    session_id: str = "",
+) -> dict:
+    """Wrap spans in the OTLP ResourceSpans envelope."""
+    resource_attrs = [
+        a for a in [
+            otlp_attr("service.name", OTEL_SERVICE_NAME),
+            otlp_attr("deployment.environment", AGENT_ENVIRONMENTS.get(agent, "default")),
+        ] if a is not None
+    ]
+    return {
+        "resource": {"attributes": resource_attrs},
+        "scopeSpans": [
+            {
+                "scope": {"name": OTEL_SCOPE_NAME, "version": OTEL_SCOPE_VERSION},
+                "spans": spans,
+            }
+        ],
+    }
+
+
+def make_otlp_payload(resource_spans: List[dict]) -> dict:
+    """Build the full ExportTraceServiceRequest JSON body."""
+    return {"resourceSpans": resource_spans}
+
+
+# ---------------------------------------------------------------------------
+# OTLP HTTP/JSON exporter
+# ---------------------------------------------------------------------------
+
+def export_otlp(payload: dict, exporters: List[dict], agent: str = "unknown", session_id: str = "") -> int:
+    """POST the OTLP JSON payload to all configured exporters.
+
+    Returns the number of successful exports.
     """
+    body = json.dumps(payload).encode("utf-8")
+    ok_count = 0
+    for exporter in exporters:
+        name = exporter.get("name", exporter.get("endpoint", "unknown"))
+        endpoint = exporter.get("endpoint", "")
+        if not endpoint:
+            log("WARN", f"Exporter '{name}' has no endpoint — skipping", agent, session_id)
+            continue
+        headers = {"Content-Type": "application/json"}
+        headers.update(exporter.get("headers", {}))
+        try:
+            req = Request(endpoint, data=body, headers=headers, method="POST")
+            with urlopen(req, timeout=EXPORT_TIMEOUT_SEC) as resp:
+                debug(f"Exported to {name}: HTTP {resp.status}", agent, session_id)
+                ok_count += 1
+        except URLError as e:
+            log("WARN", f"Export to {name} failed: {e}", agent, session_id)
+        except Exception as e:
+            log("WARN", f"Export to {name} error: {e}", agent, session_id)
+    return ok_count
+
+
+# ---------------------------------------------------------------------------
+# Utility
+# ---------------------------------------------------------------------------
+
+def trace_name(user_text: str, turn_num: int, max_len: int = 80) -> str:
+    """Derive a short, readable trace name from the user's message."""
     for raw_line in user_text.split("\n"):
         line = raw_line.strip().lstrip(">#- ").strip()
         if line:
@@ -169,7 +338,6 @@ def resolve_uri(value: Any) -> str:
 
 def read_stdin() -> dict:
     try:
-        # Guard against agents that never close stdin — kill after timeout
         if hasattr(signal, "SIGALRM"):
             old_handler = signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("stdin read timed out")))
             signal.alarm(STDIN_TIMEOUT_SEC)
@@ -290,92 +458,133 @@ def get_vscode_reasoning(turn: dict) -> str:
     return "\n".join(parts)
 
 
-def create_vscode_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn: dict, session_info: dict) -> None:
+def build_vscode_turn_spans(
+    session_id: str,
+    turn_num: int,
+    turn: dict,
+    session_info: dict,
+    agent: str,
+) -> List[dict]:
+    """Convert a VS Code turn into a list of OTLP spans."""
     user_text = turn["user_content"]
     output_text = get_vscode_assistant_text(turn)
     reasoning = get_vscode_reasoning(turn)
     tool_execs = turn["tool_executions"]
 
-    metadata: dict[str, Any] = {
-        "source": "vscode-copilot-chat",
+    trace_id = generate_trace_id()
+    root_span_id = generate_span_id()
+    turn_ts = ts_to_ns(turn.get("timestamp"))
+    end_ts = now_ns()
+
+    spans: List[dict] = []
+
+    # Root span — the turn itself
+    root_attrs: Dict[str, Any] = {
+        "langfuse.trace.name": trace_name(user_text, turn_num),
+        "session.id": session_id,
+        "langfuse.environment": AGENT_ENVIRONMENTS.get(agent, "default"),
+        "langfuse.trace.input": json.dumps({"role": "user", "content": user_text}),
+        "langfuse.trace.output": json.dumps({"role": "assistant", "content": output_text}),
         "turn_number": turn_num,
-        "session_id": session_id,
+        "source": "vscode-copilot-chat",
     }
     for key in ("producer", "vscode_version", "version"):
         if session_info.get(key):
-            metadata[key] = session_info[key]
+            root_attrs[key] = session_info[key]
 
-    name = trace_name(user_text, turn_num)
+    spans.append(make_span(
+        trace_id=trace_id,
+        span_id=root_span_id,
+        name=trace_name(user_text, turn_num),
+        start_ns=turn_ts,
+        end_ns=end_ts,
+        attributes=root_attrs,
+    ))
 
-    with langfuse.start_as_current_span(
-        name=name,
-        input={"role": "user", "content": user_text},
-        metadata=metadata,
-    ) as trace_span:
-        langfuse.update_current_trace(
-            session_id=session_id,
-            input={"role": "user", "content": user_text},
-            metadata=metadata,
-        )
-        gen_output: dict[str, Any] = {"role": "assistant", "content": output_text}
-        if reasoning:
-            gen_output["reasoning"] = reasoning[:2000]
+    # Generation span — model response
+    gen_output: Dict[str, Any] = {"role": "assistant", "content": output_text}
+    if reasoning:
+        gen_output["reasoning"] = reasoning[:2000]
 
-        with langfuse.start_as_current_observation(
-            name="Copilot Response",
-            as_type="generation",
-            model="copilot-agent",
-            input={"role": "user", "content": user_text},
-            output=gen_output,
-            metadata={"tool_count": len(tool_execs)},
-        ):
-            pass
+    gen_span_id = generate_span_id()
+    spans.append(make_span(
+        trace_id=trace_id,
+        span_id=gen_span_id,
+        parent_span_id=root_span_id,
+        name="Copilot Response",
+        start_ns=turn_ts,
+        end_ns=end_ts,
+        attributes={
+            "langfuse.observation.type": "generation",
+            "langfuse.observation.model.name": "copilot-agent",
+            "langfuse.observation.input": json.dumps({"role": "user", "content": user_text}),
+            "langfuse.observation.output": json.dumps(gen_output),
+            "tool_count": len(tool_execs),
+        },
+    ))
 
-        for te in tool_execs:
+    # Tool spans
+    for te in tool_execs:
+        try:
+            tool_input = json.loads(te["arguments"]) if isinstance(te["arguments"], str) else te["arguments"]
+        except (json.JSONDecodeError, TypeError):
+            tool_input = {"raw": te["arguments"]}
+
+        span_name = f"Tool: {te['name']}"
+        if te["name"] == "runSubagent":
             try:
-                tool_input = json.loads(te["arguments"]) if isinstance(te["arguments"], str) else te["arguments"]
-            except (json.JSONDecodeError, TypeError):
-                tool_input = {"raw": te["arguments"]}
+                args = json.loads(te["arguments"]) if isinstance(te["arguments"], str) else te["arguments"]
+                desc = args.get("description", "")
+                if desc:
+                    span_name = f"Tool: runSubagent — {desc}"
+            except Exception:
+                pass
 
-            span_name = f"Tool: {te['name']}"
-            if te["name"] == "runSubagent":
-                try:
-                    args = json.loads(te["arguments"]) if isinstance(te["arguments"], str) else te["arguments"]
-                    desc = args.get("description", "")
-                    if desc:
-                        span_name = f"Tool: runSubagent — {desc}"
-                except Exception:
-                    pass
+        tool_span_id = generate_span_id()
+        tool_output: Dict[str, Any] = {
+            "completed": te.get("completed", False),
+        }
+        if te.get("success") is not None:
+            tool_output["success"] = te["success"]
 
-            with langfuse.start_as_current_span(
-                name=span_name,
-                input=tool_input,
-                metadata={"tool_name": te["name"], "tool_id": te.get("tool_call_id", "")},
-            ) as tool_span:
-                tool_span.update(output={"completed": te.get("completed", False), "success": te.get("success")})
+        spans.append(make_span(
+            trace_id=trace_id,
+            span_id=tool_span_id,
+            parent_span_id=root_span_id,
+            name=span_name,
+            start_ns=turn_ts,
+            end_ns=end_ts,
+            attributes={
+                "langfuse.observation.input": json.dumps(tool_input),
+                "langfuse.observation.output": json.dumps(tool_output),
+                "tool_name": te["name"],
+                "tool_id": te.get("tool_call_id", ""),
+            },
+        ))
 
-        trace_span.update(output={"role": "assistant", "content": output_text})
+    return spans
 
 
-def process_vscode(langfuse: Langfuse, hook_input: dict) -> int:
+def process_vscode(exporters: List[dict], hook_input: dict) -> int:
+    agent = "github-copilot-chat"
     session_id = hook_input.get("sessionId", "")
     transcript_path = hook_input.get("transcript_path", "")
     if "transcript_path" in hook_input:
         transcript_path = resolve_uri(hook_input["transcript_path"])
 
     if not transcript_path:
-        debug("No transcript_path in stdin", "github-copilot-chat", session_id)
+        debug("No transcript_path in stdin", agent, session_id)
         return 0
 
     transcript_file = Path(transcript_path)
     if not transcript_file.exists():
-        debug(f"Transcript not found: {transcript_path}", "github-copilot-chat", session_id)
+        debug(f"Transcript not found: {transcript_path}", agent, session_id)
         return 0
 
     if not session_id:
         session_id = transcript_file.stem
 
-    state = load_state("github-copilot-chat")
+    state = load_state(agent)
     session_state = state.get(session_id, {})
     last_line = session_state.get("last_line", 0)
     turn_count = session_state.get("turn_count", 0)
@@ -396,16 +605,24 @@ def process_vscode(langfuse: Langfuse, hook_input: dict) -> int:
 
     if not new_turns:
         state[session_id] = {"last_line": total_lines, "turn_count": len(all_turns), "updated": datetime.now(timezone.utc).isoformat()}
-        save_state("github-copilot-chat", state)
+        save_state(agent, state)
         return 0
 
-    created = 0
+    # Build all spans across turns
+    all_spans: List[dict] = []
     for idx, turn in enumerate(new_turns):
-        create_vscode_trace(langfuse, session_id, turn_count + idx + 1, turn, session_info)
-        created += 1
+        spans = build_vscode_turn_spans(session_id, turn_count + idx + 1, turn, session_info, agent)
+        all_spans.extend(spans)
 
+    # Export as a single OTLP batch
+    if all_spans:
+        resource_span = make_resource_spans(all_spans, agent, session_id)
+        payload = make_otlp_payload([resource_span])
+        export_otlp(payload, exporters, agent, session_id)
+
+    created = len(new_turns)
     state[session_id] = {"last_line": total_lines, "turn_count": turn_count + created, "updated": datetime.now(timezone.utc).isoformat()}
-    save_state("github-copilot-chat", state)
+    save_state(agent, state)
     return created
 
 
@@ -494,9 +711,6 @@ def group_claude_turns(messages: list[dict]) -> list[dict]:
 
     for msg in messages:
         if is_user(msg):
-            # Tool-result "user" messages are continuations, not new turns.
-            # In the Claude API, tool results come back as role:"user" with
-            # content items of type "tool_result".
             tool_results = get_tool_results(msg)
             if tool_results and current is not None:
                 for tr in tool_results:
@@ -527,74 +741,111 @@ def group_claude_turns(messages: list[dict]) -> list[dict]:
     return turns
 
 
-def create_claude_trace(langfuse: Langfuse, session_id: str, turn_num: int, turn: dict) -> None:
+def build_claude_turn_spans(
+    session_id: str,
+    turn_num: int,
+    turn: dict,
+    agent: str,
+) -> List[dict]:
+    """Convert a Claude turn into a list of OTLP spans."""
     user_text = turn["user_text"]
     assistant_texts = [get_text_content(m) for m in turn["assistant_messages"]]
     final_output = next((t for t in reversed(assistant_texts) if t), "")
 
-    metadata: dict[str, Any] = {
-        "source": "claude",
+    trace_id = generate_trace_id()
+    root_span_id = generate_span_id()
+    turn_ts = now_ns()
+    end_ts = now_ns()
+
+    spans: List[dict] = []
+
+    # Root span — the turn
+    root_attrs: Dict[str, Any] = {
+        "langfuse.trace.name": trace_name(user_text, turn_num),
+        "session.id": session_id,
+        "langfuse.environment": AGENT_ENVIRONMENTS.get(agent, "default"),
+        "langfuse.trace.input": json.dumps({"role": "user", "content": user_text}),
+        "langfuse.trace.output": json.dumps({"role": "assistant", "content": final_output}),
         "turn_number": turn_num,
-        "session_id": session_id,
+        "source": "claude",
     }
 
-    name = trace_name(user_text, turn_num)
+    spans.append(make_span(
+        trace_id=trace_id,
+        span_id=root_span_id,
+        name=trace_name(user_text, turn_num),
+        start_ns=turn_ts,
+        end_ns=end_ts,
+        attributes=root_attrs,
+    ))
 
-    with langfuse.start_as_current_span(
-        name=name,
-        input={"role": "user", "content": user_text},
-        metadata=metadata,
-    ) as trace_span:
-        langfuse.update_current_trace(
-            session_id=session_id,
-            input={"role": "user", "content": user_text},
-            metadata=metadata,
-        )
-        model = "claude-sonnet-4-20250514"
-        if turn["assistant_messages"]:
-            first_am = turn["assistant_messages"][0]
-            model = first_am.get("model", model)
+    # Generation span — model response
+    model = "claude-sonnet-4-20250514"
+    if turn["assistant_messages"]:
+        first_am = turn["assistant_messages"][0]
+        model = first_am.get("model", model)
 
-        with langfuse.start_as_current_observation(
-            name="Claude Response",
-            as_type="generation",
-            model=model,
-            input={"role": "user", "content": user_text},
-            output={"role": "assistant", "content": final_output},
-            metadata={"tool_count": len(turn["tool_calls"])},
-        ):
-            pass
+    gen_span_id = generate_span_id()
+    spans.append(make_span(
+        trace_id=trace_id,
+        span_id=gen_span_id,
+        parent_span_id=root_span_id,
+        name="Claude Response",
+        start_ns=turn_ts,
+        end_ns=end_ts,
+        attributes={
+            "langfuse.observation.type": "generation",
+            "langfuse.observation.model.name": model,
+            "langfuse.observation.input": json.dumps({"role": "user", "content": user_text}),
+            "langfuse.observation.output": json.dumps({"role": "assistant", "content": final_output}),
+            "tool_count": len(turn["tool_calls"]),
+        },
+    ))
 
-        for tc in turn["tool_calls"]:
-            tc_name = tc.get("name", "unknown")
-            tc_id = tc.get("id", "")
-            tc_input = tc.get("input", {})
+    # Tool spans
+    for tc in turn["tool_calls"]:
+        tc_name = tc.get("name", "unknown")
+        tc_id = tc.get("id", "")
+        tc_input = tc.get("input", {})
 
-            result = turn["tool_results"].get(tc_id, {})
-            result_content = result.get("content", "")
-            is_error = result.get("is_error", False)
+        result = turn["tool_results"].get(tc_id, {})
+        result_content = result.get("content", "")
+        is_error = result.get("is_error", False)
 
-            with langfuse.start_as_current_span(
-                name=f"Tool: {tc_name}",
-                input=tc_input,
-                metadata={"tool_name": tc_name, "tool_id": tc_id},
-            ) as tool_span:
-                tool_span.update(output={
-                    "content": result_content[:2000] if isinstance(result_content, str) else str(result_content)[:2000],
-                    "is_error": is_error,
-                })
+        tool_span_id = generate_span_id()
+        tool_output = {
+            "content": result_content[:2000] if isinstance(result_content, str) else str(result_content)[:2000],
+            "is_error": is_error,
+        }
 
-        trace_span.update(output={"role": "assistant", "content": final_output})
+        spans.append(make_span(
+            trace_id=trace_id,
+            span_id=tool_span_id,
+            parent_span_id=root_span_id,
+            name=f"Tool: {tc_name}",
+            start_ns=turn_ts,
+            end_ns=end_ts,
+            attributes={
+                "langfuse.observation.input": json.dumps(tc_input),
+                "langfuse.observation.output": json.dumps(tool_output),
+                "tool_name": tc_name,
+                "tool_id": tc_id,
+            },
+            status_code=2 if is_error else 1,  # STATUS_CODE_ERROR=2, STATUS_CODE_OK=1
+        ))
+
+    return spans
 
 
-def process_claude(langfuse: Langfuse) -> int:
+def process_claude(exporters: List[dict]) -> int:
+    agent = "claude"
     result = find_latest_transcript()
     if not result:
-        debug("No transcript file found", "claude")
+        debug("No transcript file found", agent)
         return 0
 
     session_id, transcript_file = result
-    state = load_state("claude")
+    state = load_state(agent)
     session_state = state.get(session_id, {})
     last_line = session_state.get("last_line", 0)
     turn_count = session_state.get("turn_count", 0)
@@ -623,16 +874,24 @@ def process_claude(langfuse: Langfuse) -> int:
 
     if not new_turns:
         state[session_id] = {"last_line": total_lines, "turn_count": len(all_turns), "updated": datetime.now(timezone.utc).isoformat()}
-        save_state("claude", state)
+        save_state(agent, state)
         return 0
 
-    created = 0
+    # Build all spans across turns
+    all_spans: List[dict] = []
     for idx, turn in enumerate(new_turns):
-        create_claude_trace(langfuse, session_id, turn_count + idx + 1, turn)
-        created += 1
+        spans = build_claude_turn_spans(session_id, turn_count + idx + 1, turn, agent)
+        all_spans.extend(spans)
 
+    # Export as a single OTLP batch
+    if all_spans:
+        resource_span = make_resource_spans(all_spans, agent, session_id)
+        payload = make_otlp_payload([resource_span])
+        export_otlp(payload, exporters, agent, session_id)
+
+    created = len(new_turns)
     state[session_id] = {"last_line": total_lines, "turn_count": turn_count + created, "updated": datetime.now(timezone.utc).isoformat()}
-    save_state("claude", state)
+    save_state(agent, state)
     return created
 
 
@@ -655,7 +914,10 @@ def main() -> None:
         if agent == "github-copilot-chat":
             raw_tp = hook_input.get("transcript_path", "")
             transcript = resolve_uri(raw_tp) if raw_tp else ""
-        log("INFO", f"Hook invoked: agent={agent} keys={KEY_SOURCE} host={LANGFUSE_HOST}", agent, session_id)
+
+        exporters = build_exporters(_config)
+        exporter_names = [e.get("name", "?") for e in exporters]
+        log("INFO", f"Hook invoked: agent={agent} exporters={exporter_names}", agent, session_id)
         debug(f"stdin keys: {list(hook_input.keys())}", agent, session_id)
         if transcript:
             debug(f"transcript: {transcript}", agent, session_id)
@@ -664,26 +926,17 @@ def main() -> None:
             log("INFO", "Tracing disabled (TRACE_TO_LANGFUSE != true) — exiting", agent, session_id)
             output_and_exit()
 
-        if not LANGFUSE_PUBLIC_KEY or not LANGFUSE_SECRET_KEY:
-            log("ERROR", f"Langfuse API keys not set (source={KEY_SOURCE})", agent, session_id)
+        if not exporters:
+            log("ERROR", "No exporters configured (no keys/endpoints found)", agent, session_id)
             output_and_exit(code=1)
 
-        langfuse = Langfuse(
-            public_key=LANGFUSE_PUBLIC_KEY,
-            secret_key=LANGFUSE_SECRET_KEY,
-            host=LANGFUSE_HOST,
-            environment=AGENT_ENVIRONMENTS.get(agent, "default"),
-        )
-
         if agent == "github-copilot-chat":
-            turns = process_vscode(langfuse, hook_input)
+            turns = process_vscode(exporters, hook_input)
         else:
-            turns = process_claude(langfuse)
+            turns = process_claude(exporters)
 
-        langfuse.flush()
         duration = (datetime.now() - script_start).total_seconds()
-        log("INFO", f"Done: {turns} turn(s) in {duration:.1f}s", agent, session_id)
-        langfuse.shutdown()
+        log("INFO", f"Done: {turns} turn(s) in {duration:.1f}s → {exporter_names}", agent, session_id)
     except Exception as e:
         exit_code = 1
         try:
