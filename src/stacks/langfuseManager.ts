@@ -115,9 +115,6 @@ export class LangfuseManager {
     step("Verifying Docker is installed and running…");
     await this.requireDocker();
 
-    step("Ensuring Python langfuse package is installed…");
-    await this.ensurePythonLangfuse();
-
     step("Writing docker-compose file…");
     this.writeComposeFile();
 
@@ -421,24 +418,6 @@ export class LangfuseManager {
       );
     }
     this.output.info("Docker check passed.");
-  }
-
-  private async ensurePythonLangfuse(): Promise<void> {
-    try {
-      await exec("python3 -c \"import langfuse\"", { timeout: 10_000 });
-      this.output.info("Python langfuse package already installed — skipping install.");
-    } catch {
-      this.output.info("Python langfuse package not found — installing via pip3…");
-      try {
-        await exec("pip3 install --user langfuse", { timeout: 120_000 });
-        this.output.info("Python langfuse package installed successfully.");
-      } catch (e: any) {
-        this.output.warn(`Could not install langfuse Python package: ${e.message}`);
-        vscode.window.showWarningMessage(
-          "Could not auto-install the `langfuse` Python package. Please run: pip3 install langfuse",
-        );
-      }
-    }
   }
 
   private async waitForReady(timeoutMs = 90_000, report?: StepReporter): Promise<void> {
