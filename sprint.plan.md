@@ -49,6 +49,18 @@ Benefits:
 | 11 | **Wire HookManager to JaegerManager** — Auto-include Jaeger OTLP exporter when managed Jaeger is configured. | `hookManager.ts` | DONE |
 | 12 | **Build check + push** | — | DONE |
 
+### Phase 3: Spec Gap Fixes (OTel semconv fidelity)
+
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 13 | **Real timestamps** — VS Code: use tool.execution_start/complete timestamps for tool spans, user.message→last assistant.message for root/chat. Claude: per-message timestamps for all spans. | `langfuse_hook.py` | DONE |
+| 14 | **Token usage** — Extract `gen_ai.usage.input_tokens`/`output_tokens` from Claude `message.usage` (incl. cache_read). Per-subagent tokens from `toolUseResult.usage`. | `langfuse_hook.py` | DONE |
+| 15 | **Claude thinking** — Extract `{type:"thinking"}` content blocks into `gen_ai.reasoning` attribute on chat spans. | `langfuse_hook.py` | DONE |
+| 16 | **Rich messages** — Use `fmt_tool_call()`/`fmt_tool_result()` in `gen_ai.input.messages` for Claude, showing full tool call + result conversation per OTel message schema. | `langfuse_hook.py` | DONE |
+| 17 | **Nested subagents** — `Task`/`runSubagent` → `invoke_agent` child spans. Claude: parse `subagents/agent-{id}.jsonl` for grandchild chat + tool spans. VS Code: opaque span with real timestamps. | `langfuse_hook.py` | DONE |
+| 18 | **Env var rename** — Accept `AGENT_TRACING_ENABLED` alongside legacy `TRACE_TO_LANGFUSE`. Write both to settings.json. | `langfuse_hook.py`, `hookManager.ts` | DONE |
+| 19 | **Build check + push** | — | DONE |
+
 ---
 
 ## Config Format Evolution
