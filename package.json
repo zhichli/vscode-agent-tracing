@@ -2,7 +2,7 @@
   "name": "vscode-agent-tracing",
   "displayName": "Agent Tracing",
   "description": "Local-first observability for AI coding agents. One-click setup for tracing VS Code Copilot and Claude sessions with pluggable backends like Langfuse.",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "publisher": "zhichli",
   "license": "MIT",
   "repository": {
@@ -359,7 +359,10 @@
           "markdownDescription": "Additional OTLP trace exporters. Each entry sends traces to an OTLP-compatible backend alongside Langfuse.\n\nExample for Jaeger:\n```json\n[{ \"name\": \"jaeger\", \"endpoint\": \"http://localhost:4318/v1/traces\" }]\n```",
           "items": {
             "type": "object",
-            "required": ["name", "endpoint"],
+            "required": [
+              "name",
+              "endpoint"
+            ],
             "properties": {
               "name": {
                 "type": "string",
@@ -372,7 +375,9 @@
               "headers": {
                 "type": "object",
                 "description": "Additional HTTP headers (e.g. Authorization, api-key)",
-                "additionalProperties": { "type": "string" }
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           }
