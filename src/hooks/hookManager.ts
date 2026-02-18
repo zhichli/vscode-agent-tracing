@@ -153,7 +153,8 @@ export class HookManager {
 
     const cmd = HookManager.HOOK_CMD;
     const envVars = {
-      TRACE_TO_LANGFUSE: "true",
+      AGENT_TRACING_ENABLED: "true",
+      TRACE_TO_LANGFUSE: "true",  // Legacy compat — hook accepts both
       LANGFUSE_PUBLIC_KEY: this.langfuse.publicKey,
       LANGFUSE_SECRET_KEY: this.langfuse.secretKey,
       LANGFUSE_HOST: this.langfuse.dashboardUrl,
@@ -225,6 +226,7 @@ export class HookManager {
       }
 
       if (settings.env && typeof settings.env === "object") {
+        delete settings.env.AGENT_TRACING_ENABLED;
         delete settings.env.TRACE_TO_LANGFUSE;
         delete settings.env.LANGFUSE_PUBLIC_KEY;
         delete settings.env.LANGFUSE_SECRET_KEY;
