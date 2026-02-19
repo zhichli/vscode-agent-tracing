@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Maintenance
+- Added a repository ESLint flat config compatible with ESLint v10.
+- Added TypeScript ESLint tooling to support a working local lint gate.
+- Kept release packaging/docs assets aligned with the current extension UX.
+
 ## 0.2.0
 
 ### UI/UX
