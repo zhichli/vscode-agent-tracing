@@ -10,9 +10,9 @@ import {
 
 /** Default credentials seeded via LANGFUSE_INIT_* on first launch. */
 export const LANGFUSE_DEFAULT_USER = {
-  email: "local@agent-tracing.dev",
-  password: "agenttracing",
-  name: "Agent Tracing",
+  email: "vscode@agent.tracing",
+  password: "vscode@agent.tracing",
+  name: "vscode",
 } as const;
 
 /** Whether the extension manages Docker or connects to an external instance. */
@@ -239,6 +239,10 @@ export class LangfuseManager {
     }
 
     await this.context.globalState.update("langfuse.mode", undefined);
+    await this.context.globalState.update("langfuse.loginShown", undefined);
+    await this.context.globalState.update("nextauth.secret", undefined);
+    await this.context.globalState.update("salt", undefined);
+    await this.context.globalState.update("encryption.key", undefined);
     step("Stack purged — all data removed.");
   }
 
@@ -321,6 +325,27 @@ export class LangfuseManager {
         preserveFocus: false,
       },
     );
+
+    // On the first dashboard open for managed mode, show login credentials
+    // so the user can sign in without hunting for the "Login Info" command.
+    if (this.isManaged) {
+      const shown = this.context.globalState.get<boolean>("langfuse.loginShown");
+      if (!shown) {
+        await this.context.globalState.update("langfuse.loginShown", true);
+        void vscode.window
+          .showInformationMessage(
+            `Langfuse limitation: dashboard login is required. Both email and password are: ${LANGFUSE_DEFAULT_USER.email}`,
+            "Copy",
+          )
+          .then(async (action) => {
+            if (action === "Copy") {
+              await vscode.env.clipboard.writeText(
+                `${LANGFUSE_DEFAULT_USER.email}`,
+              );
+            }
+          });
+      }
+    }
   }
 
   /** Map a ViewColumn number to the ordinal word used by focus commands. */
@@ -353,16 +378,13 @@ export class LangfuseManager {
       return;
     }
     const action = await vscode.window.showInformationMessage(
-      `Langfuse Login\n\nEmail: ${LANGFUSE_DEFAULT_USER.email}\nPassword: ${LANGFUSE_DEFAULT_USER.password}`,
+      `Langfuse Login\n\nBoth email and password are: ${LANGFUSE_DEFAULT_USER.email}`,
       { modal: true },
-      { title: "Copy Email" },
-      { title: "Copy Password" },
+      { title: "Copy" },
       { title: "Cancel", isCloseAffordance: true },
     );
-    if (action?.title === "Copy Email") {
+    if (action?.title === "Copy") {
       await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.email);
-    } else if (action?.title === "Copy Password") {
-      await vscode.env.clipboard.writeText(LANGFUSE_DEFAULT_USER.password);
     }
   }
 
@@ -535,9 +557,9 @@ services:
       LANGFUSE_INIT_PROJECT_NAME: Agent Tracing
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "${pk}"
       LANGFUSE_INIT_PROJECT_SECRET_KEY: "${sk}"
-      LANGFUSE_INIT_USER_EMAIL: local@agent-tracing.dev
-      LANGFUSE_INIT_USER_NAME: Agent Tracing
-      LANGFUSE_INIT_USER_PASSWORD: agenttracing
+      LANGFUSE_INIT_USER_EMAIL: vscode@agent.tracing
+      LANGFUSE_INIT_USER_NAME: vscode
+      LANGFUSE_INIT_USER_PASSWORD: vscode@agent.tracing
     labels:
       com.agent-tracing.managed: "true"
       com.agent-tracing.stack: langfuse

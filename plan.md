@@ -47,7 +47,7 @@ Single tree view **"Tracing Solutions"** with Langfuse as a flat leaf node (no a
 | # | Task | Status |
 |---|------|--------|
 | 3.1 | Single hook entry in `~/.claude/settings.json` with env embedded + root env | [x] |
-| 3.2 | Single shared script at `~/.claude/hooks/langfuse_hook.py` detecting agent at runtime | [x] |
+| 3.2 | Single shared script at `~/.claude/hooks/agent_tracing_hook.py` detecting agent at runtime | [x] |
 | 3.3 | `.langfuse_config.json` with keys + log_dir as fallback config | [x] |
 | 3.4 | Script reads config with env-var-first fallback | [x] |
 

@@ -19,7 +19,7 @@
 ```
 Agent Session                    Hook Script (Python, stdlib only)         Backends
 ─────────────                    ─────────────────────────────────         ────────
-VS Code Copilot ──Stop event──►  langfuse_hook.py                   ┌──► Langfuse (OTLP)
+VS Code Copilot ──Stop event──►  agent_tracing_hook.py              ┌──► Langfuse (OTLP)
                      │           ├─ reads stdin JSON                │
 Claude Code ─────Stop event──►  ├─ reads transcript JSONL          ├──► Jaeger (OTLP)
                      │           ├─ groups messages into turns      │
@@ -99,7 +99,7 @@ Single entry in `~/.claude/settings.json`, serves both VS Code Copilot and Claud
       "matcher": "*",
       "hooks": [{
         "type": "command",
-        "command": "python3 ~/.claude/hooks/langfuse_hook.py",
+        "command": "python3 ~/.claude/hooks/agent_tracing_hook.py",
         "env": {
           "TRACE_TO_LANGFUSE": "true",
           "LANGFUSE_PUBLIC_KEY": "<pk>",
@@ -155,7 +155,7 @@ The script reads stdin JSON, detects the agent from the key naming convention, t
 ~/.claude/
 ├── settings.json              ← Hook entry + env vars
 ├── hooks/
-│   ├── langfuse_hook.py       ← Shared OTLP hook (both agents)
+│   ├── agent_tracing_hook.py  ← Shared OTLP hook (both agents)
 │   └── .langfuse_config.json  ← Exporters + auth + log dir
 └── state/
     ├── agent_tracing.github-copilot-chat.state.json  ← Incremental state

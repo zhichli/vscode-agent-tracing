@@ -46,7 +46,7 @@ src/
 
 resources/
 └── hooks/
-    └── langfuse_hook.py               ← Shared Python hook script (bundled, copied to ~/.claude/hooks/)
+    └── agent_tracing_hook.py          ← Shared Python hook script (bundled, copied to ~/.claude/hooks/)
 ```
 
 ### Key Classes
@@ -67,7 +67,7 @@ extension.ts
 
 HookManager
   └─ writeHookConfig() → ~/.claude/settings.json
-  └─ installSharedScript() → ~/.claude/hooks/langfuse_hook.py
+  └─ installSharedScript() → ~/.claude/hooks/agent_tracing_hook.py
   └─ writeLangfuseConfig() → ~/.claude/hooks/.langfuse_config.json
 
 LangfuseManager
@@ -91,7 +91,7 @@ Both agents share a single entry in `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.claude/hooks/langfuse_hook.py",
+            "command": "python3 ~/.claude/hooks/agent_tracing_hook.py",
             "env": {
               "TRACE_TO_LANGFUSE": "true",
               "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
@@ -120,7 +120,7 @@ Both agents share a single entry in `~/.claude/settings.json`:
 
 When editing `settings.json`, the extension:
 
-1. **Preserves existing entries** — only touches our `langfuse_hook.py` entry
+1. **Preserves existing entries** — only touches our `agent_tracing_hook.py` entry
 2. **Preserves existing env vars** — only manages our 4 keys (`TRACE_TO_LANGFUSE`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`)
 3. **Cleans up empties** — removes `hooks.Stop` array if empty after our removal, removes `hooks` object if empty, removes `env` object if empty
 4. **Guards against corruption** — validates `hooks` is an object, `Stop` is an array, catches parse errors

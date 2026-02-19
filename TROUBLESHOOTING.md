@@ -81,7 +81,7 @@ curl -s http://localhost:3000/api/public/health
 
 **Check 2: Is the hook entry in settings.json?**
 ```bash
-cat ~/.claude/settings.json | python3 -m json.tool | grep langfuse_hook
+cat ~/.claude/settings.json | python3 -m json.tool | grep agent_tracing_hook
 ```
 
 **Check 3: Is TRACE_TO_LANGFUSE set?**
@@ -133,11 +133,14 @@ The integrated browser may fail if Langfuse isn't fully ready yet.
 
 ### Dashboard login — what are the credentials?
 
-Right-click the Langfuse node → **Login Info**, or use the command palette: `Agent Tracing: Show Login Info`.
+Click the inline **Login Info** (`$(account)`) button on the running Langfuse row, or use the command palette: `Agent Tracing: Info: Login Credentials`.
 
 Default credentials (managed mode):
-- **Email:** `local@agent-tracing.dev`
-- **Password:** `agenttracing`
+- **Email:** `vscode@agent.tracing`
+- **User Name:** `vscode`
+- **Password:** `vscode@agent.tracing`
+
+The login prompt now includes a single **Copy** action. Email and password use the same value.
 
 ### Port conflict (3000 already in use)
 
@@ -151,16 +154,16 @@ Change the port in VS Code settings:
 
 Then run **Full Setup** again (it regenerates the Docker Compose file with the new port).
 
-### Hook script errors: "ModuleNotFoundError: No module named 'langfuse'"
+### Hook script errors: Python/runtime issues
 
-The Python `langfuse` package isn't installed for the Python 3 that the hook runs with.
+The hook script uses Python stdlib only (no `langfuse` pip package required).
 
 ```bash
-# Install for the system Python 3
-pip3 install --user langfuse
-
-# Or check which python3 the hook will use
+# Check which python3 the hook will use
 which python3
+
+# Check Python version (3.8+ required)
+python3 --version
 ```
 
 ### Existing hooks in settings.json — will the extension break them?
@@ -168,7 +171,7 @@ which python3
 No. The extension is designed to be non-destructive:
 
 - **Install:** Appends our entry to `hooks.Stop` array, merges our 4 env keys into root `env`. Existing entries and env vars are untouched.
-- **Remove:** Filters out only entries containing `langfuse_hook.py`. Deletes only our 4 env keys. If arrays/objects become empty, they're cleaned up.
+- **Remove:** Filters out entries containing `agent_tracing_hook.py` (and legacy `langfuse_hook.py` during migration). Deletes only our 4 env keys. If arrays/objects become empty, they're cleaned up.
 
 ### I want to reset everything
 
@@ -177,7 +180,7 @@ No. The extension is designed to be non-destructive:
 # (or use the Disable Hook command — it's cleaner)
 
 # Remove shared files
-rm ~/.claude/hooks/langfuse_hook.py
+rm ~/.claude/hooks/agent_tracing_hook.py
 rm ~/.claude/hooks/.langfuse_config.json
 
 # Stop and remove Docker containers + volumes
@@ -203,13 +206,13 @@ python3 -c "
 import json, pathlib
 s = json.loads((pathlib.Path.home()/'.claude'/'settings.json').read_text())
 hooks = s.get('hooks',{}).get('Stop',[])
-found = any('langfuse_hook' in str(h) for h in hooks)
+found = any('agent_tracing_hook' in str(h) or 'langfuse_hook' in str(h) for h in hooks)
 print('Hook entry:', 'FOUND' if found else 'MISSING')
 print('Root env TRACE_TO_LANGFUSE:', s.get('env',{}).get('TRACE_TO_LANGFUSE','NOT SET'))
 "
 
-# Python langfuse installed?
-python3 -c "import langfuse; print('langfuse', langfuse.__version__)" 2>/dev/null || echo "NOT INSTALLED"
+# Python runtime available?
+python3 --version
 
 # Hook log location
 python3 -c "

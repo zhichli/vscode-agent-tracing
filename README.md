@@ -21,9 +21,26 @@ One-click tracing setup for VS Code Copilot Chat and Claude with Langfuse — no
 3. Click **▶ Setup** on the Langfuse row
 4. Start using Copilot Chat or Claude — traces appear in the Langfuse dashboard
 
+> Due to a Langfuse limitation, dashboard login is still required even in managed local mode.
+> Use the inline **Login Info** row button (`$(account)`) on the Langfuse node to quickly copy credentials.
+
 > Requires **Docker** (for the Langfuse stack) and **Python 3.8+** (for hook scripts — uses only stdlib, no pip packages needed).
 
 > **Tip — auto-refresh:** The Langfuse traces table defaults to manual refresh. To see new traces automatically, click the **▾** dropdown next to the refresh button in the traces toolbar and select an interval (e.g. **30s**).
+
+## Screenshots
+
+### Sidebar
+
+<img src="docs/screenshots/agent-tracing-sidebar.png" alt="Agent Tracing Sidebar" width="657" />
+
+### Langfuse Dashboard
+
+<img src="docs/screenshots/langfuse-tracing-dashboard.png" alt="Langfuse Tracing Dashboard" width="1200" />
+
+### Jaeger Dashboard
+
+<img src="docs/screenshots/jaeger-search-dashboard.png" alt="Jaeger Search Dashboard" width="1200" />
 
 ## How It Works
 
@@ -33,7 +50,7 @@ Agent Session → Stop Hook → Parse Transcript → Send to Langfuse → View i
 
 The extension uses the VS Code [hooks system](https://code.visualstudio.com/docs/copilot/customization/hooks) and Claude's [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) to capture session transcripts after each agent response.
 
-A single shared Python script (`~/.claude/hooks/langfuse_hook.py`) detects the calling agent at runtime and handles both transcript formats. It emits standard **OpenTelemetry (OTLP JSON)** traces to all configured backends — no vendor SDK required.
+A single shared Python script (`~/.claude/hooks/agent_tracing_hook.py`) detects the calling agent at runtime and handles both transcript formats. It emits standard **OpenTelemetry (OTLP JSON)** traces to all configured backends — no vendor SDK required.
 
 Both agents share a single hook entry in `~/.claude/settings.json`:
 
@@ -56,23 +73,32 @@ This means one hook execution per event — no duplicates.
 
 ## Sidebar
 
-The sidebar shows a single flat tree view with inline actions on the Langfuse node:
+The sidebar shows a single flat tree view with inline actions on each backend node.
 
 ```
 TRACING SOLUTIONS                                [↻]
-├── Langfuse    Running — localhost:3000    [📄] [⏹]
+├── Langfuse    Running — localhost:3000    [📄] [👤]
 ```
+
+### Title Bar Controls
+
+The Agent Tracing title bar contains global controls:
+
+- **Hook: Install / Hook: Uninstall** (shared across both backends)
+- **Hook: Enable VS Code Settings** (shown only when `chat.useHooks` / `chat.useClaudeHooks` are off)
+- **Hook: Show Log**
+- **Refresh**
 
 ### States
 
 | State | Inline Icons | Right-click Menu |
 |-------|-------------|-----------------|
 | **Not configured** | ▶ Setup | — |
-| **Running + hooks on** | 📄 Dashboard, ⏹ Stop | Open External, Login Info, Stack Version, Disable Hooks, Show Hook Log, Recreate, Delete |
-| **Running + hooks off** | 🔌 Enable, 📄 Dashboard, ⏹ Stop | Open External, Login Info, Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
-| **Stopped + hooks on** | ▶ Start | Stack Version, Disable Hooks, Show Hook Log, Recreate, Delete |
-| **Stopped + hooks off** | ▶ Start | Stack Version, Enable Hooks, Show Hook Log, Recreate, Delete |
-| **Running (external)** | 📄 Dashboard, ⏹ Disconnect | Open External, Disconnect, Disable/Enable Hooks, Show Hook Log |
+| **Running + hooks on** | 📄 Dashboard, 👤 Login Info | Open External, Stack Version, Stack: Stop, Recreate, Delete |
+| **Running + hooks off** | 📄 Dashboard | Open External, Stack Version, Recreate, Delete |
+| **Stopped + hooks on** | ▶ Start | Stack Version, Recreate, Delete |
+| **Stopped + hooks off** | ▶ Start | Stack Version, Recreate, Delete |
+| **Running (external)** | 📄 Dashboard, ⏹ Disconnect | Open External, Disconnect |
 | **Docker not found** | ▶ Setup | — |
 
 ## File Layout
@@ -81,7 +107,7 @@ TRACING SOLUTIONS                                [↻]
 ~/.claude/
 ├── settings.json              ← Hook entry (env embedded) + root env vars
 └── hooks/
-    ├── langfuse_hook.py       ← Shared OTLP hook script (both agents)
+    ├── agent_tracing_hook.py  ← Shared OTLP hook script (both agents)
     └── .langfuse_config.json  ← Exporter endpoints + auth (written by extension)
 ```
 
@@ -97,14 +123,16 @@ All commands are available via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+
 | `Agent Tracing: Recreate Stack` | Rebuild containers, keep trace data |
 | `Agent Tracing: Delete Stack` | Remove containers + all trace data |
 | `Agent Tracing: Open Dashboard` | Open Langfuse in VS Code integrated browser |
-| `Agent Tracing: Open Dashboard (External Browser)` | Open Langfuse in system browser |
+| `Agent Tracing: Dashboard: Open in External Browser` | Open Langfuse in system browser |
 | `Agent Tracing: Login Info` | Modal with email/password + copy buttons |
 | `Agent Tracing: Connect to Existing Langfuse` | Connect to a running Langfuse instance |
-| `Agent Tracing: Disconnect External Langfuse` | Disconnect from external instance |
-| `Agent Tracing: Enable Hooks` | Enable tracing hooks for all agents |
-| `Agent Tracing: Disable Hooks` | Disable tracing hooks |
-| `Agent Tracing: Show Hook Log` | Open the hook script log for debugging |
-| `Agent Tracing: Stack Info` | Show pinned Docker image versions |
+| `Agent Tracing: Dashboard: Disconnect` | Disconnect from external instance |
+| `Agent Tracing: Hook: Install` | Install tracing hooks (shared for Langfuse + Jaeger) |
+| `Agent Tracing: Hook: Uninstall` | Remove tracing hooks (shared for Langfuse + Jaeger) |
+| `Agent Tracing: Hook: Enable VS Code Settings` | Enable `chat.useHooks` + `chat.useClaudeHooks` |
+| `Agent Tracing: Hook: Show Log` | Open the hook script log for debugging |
+| `Agent Tracing: Info: Stack Versions` | Show pinned Langfuse Docker image versions |
+| `Agent Tracing: Info: Jaeger Stack Versions` | Show Jaeger image and endpoint versions |
 | `Agent Tracing: Refresh` | Refresh sidebar status |
 
 ## Settings

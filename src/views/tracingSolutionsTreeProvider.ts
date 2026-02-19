@@ -30,6 +30,7 @@ export class TracingSolutionsTreeProvider
   private langfuseState: BackendState = "not-configured";
   private jaegerState: BackendState = "not-configured";
   private hooksInstalled = false;
+  private hookSettingsOk = true;
 
   constructor(
     private langfuse: LangfuseManager,
@@ -52,11 +53,14 @@ export class TracingSolutionsTreeProvider
         new LangfuseNode(
           this.langfuseState,
           this.hooksInstalled,
+          this.hookSettingsOk,
           this.langfuse.dashboardUrl,
           this.extensionUri,
         ),
         new JaegerNode(
           this.jaegerState,
+          this.hooksInstalled,
+          this.hookSettingsOk,
           this.jaeger.dashboardUrl,
           this.extensionUri,
         ),
@@ -67,6 +71,15 @@ export class TracingSolutionsTreeProvider
 
   private async resolveStates(): Promise<void> {
     this.hooksInstalled = this.hookManager.isHookInstalled();
+    vscode.commands.executeCommand("setContext", "agentTracing.hooksInstalled", this.hooksInstalled);
+
+    // Check VS Code hook settings only when hooks are installed
+    if (this.hooksInstalled) {
+      const { useHooks, useClaudeHooks } = this.hookManager.checkVSCodeHookSettings();
+      this.hookSettingsOk = useHooks && useClaudeHooks;
+    } else {
+      this.hookSettingsOk = true; // irrelevant when no hooks
+    }
 
     // Resolve Langfuse & Jaeger states in parallel
     const [langfuseRunning, jaegerRunning] = await Promise.all([
@@ -112,6 +125,7 @@ class LangfuseNode extends vscode.TreeItem {
   constructor(
     state: BackendState,
     hooksOn: boolean,
+    hookSettingsOk: boolean,
     dashboardUrl: string,
     extensionUri: vscode.Uri,
   ) {
@@ -128,31 +142,55 @@ class LangfuseNode extends vscode.TreeItem {
       new vscode.ThemeColor("problemsWarningIcon.foreground"),
     );
 
+    // If hooks are on but VS Code settings aren't enabled, override display
+    const hooksEffective = hooksOn && hookSettingsOk;
+    const settingsWarning = hooksOn && !hookSettingsOk
+      ? " — enable chat.useHooks in VS Code settings"
+      : "";
+
     switch (state) {
-      case "running":
-        this.description = hooksOn ? dashboardUrl : `${dashboardUrl} (hooks disabled)`;
-        this.iconPath = hooksOn
+      case "running": {
+        this.description = hooksEffective
+          ? dashboardUrl
+          : `${dashboardUrl} (hooks disabled${settingsWarning})`;
+        this.iconPath = hooksEffective
           ? { light: runningIcon, dark: runningIcon }
           : warningIcon;
-        this.contextValue = hooksOn ? "langfuse-running-hooks-on" : "langfuse-running-hooks-off";
+        const hookSuffix = hooksOn
+          ? (hookSettingsOk ? "hooks-on" : "hooks-settings-off")
+          : "hooks-off";
+        this.contextValue = `langfuse-running-${hookSuffix}`;
         break;
+      }
 
-      case "running-external":
-        this.description = hooksOn ? dashboardUrl : `${dashboardUrl} (hooks disabled)`;
-        this.iconPath = hooksOn
+      case "running-external": {
+        this.description = hooksEffective
+          ? dashboardUrl
+          : `${dashboardUrl} (hooks disabled${settingsWarning})`;
+        this.iconPath = hooksEffective
           ? { light: runningIcon, dark: runningIcon }
           : warningIcon;
-        this.contextValue = hooksOn ? "langfuse-running-external-hooks-on" : "langfuse-running-external-hooks-off";
+        const hookSuffix = hooksOn
+          ? (hookSettingsOk ? "hooks-on" : "hooks-settings-off")
+          : "hooks-off";
+        this.contextValue = `langfuse-running-external-${hookSuffix}`;
         break;
+      }
 
-      case "stopped":
-        this.description = hooksOn ? "Stopped — hooks enabled" : "Stopped";
+      case "stopped": {
+        this.description = hooksOn
+          ? `Stopped — hooks enabled${settingsWarning}`
+          : "Stopped";
         this.iconPath = new vscode.ThemeIcon(
           "circle-outline",
           new vscode.ThemeColor("disabledForeground"),
         );
-        this.contextValue = hooksOn ? "langfuse-stopped-hooks-on" : "langfuse-stopped-hooks-off";
+        const hookSuffix = hooksOn
+          ? (hookSettingsOk ? "hooks-on" : "hooks-settings-off")
+          : "hooks-off";
+        this.contextValue = `langfuse-stopped-${hookSuffix}`;
         break;
+      }
 
       case "not-configured":
         this.description = "Not configured";
@@ -175,9 +213,14 @@ class LangfuseNode extends vscode.TreeItem {
 
     // Tooltip: show URL only when running
     const showUrl = state === "running" || state === "running-external";
+    const hookStatus = hooksOn
+      ? hookSettingsOk
+        ? " — hooks enabled"
+        : " — hooks installed but chat.useHooks / chat.useClaudeHooks disabled in VS Code settings"
+      : "";
     this.tooltip = showUrl
-      ? `Langfuse (${state})${hooksOn ? " — hooks enabled" : ""}\n${dashboardUrl}`
-      : `Langfuse (${state})${hooksOn ? " — hooks enabled" : ""}`;
+      ? `Langfuse (${state})${hookStatus}\n${dashboardUrl}`
+      : `Langfuse (${state})${hookStatus}`;
     this.id = "langfuse-root";
   }
 }
@@ -189,6 +232,8 @@ class LangfuseNode extends vscode.TreeItem {
 class JaegerNode extends vscode.TreeItem {
   constructor(
     state: BackendState,
+    hooksOn: boolean,
+    hookSettingsOk: boolean,
     dashboardUrl: string,
     extensionUri: vscode.Uri,
   ) {
@@ -205,15 +250,26 @@ class JaegerNode extends vscode.TreeItem {
       new vscode.ThemeColor("problemsWarningIcon.foreground"),
     );
 
+    const hooksEffective = hooksOn && hookSettingsOk;
+    const settingsWarning = hooksOn && !hookSettingsOk
+      ? " — enable chat.useHooks in VS Code settings"
+      : "";
+
     switch (state) {
       case "running":
-        this.description = dashboardUrl;
-        this.iconPath = { light: runningIcon, dark: runningIcon };
+        this.description = hooksEffective
+          ? dashboardUrl
+          : `${dashboardUrl} (hooks disabled${settingsWarning})`;
+        this.iconPath = hooksEffective
+          ? { light: runningIcon, dark: runningIcon }
+          : warningIcon;
         this.contextValue = "jaeger-running";
         break;
 
       case "stopped":
-        this.description = "Stopped";
+        this.description = hooksOn
+          ? `Stopped — hooks enabled${settingsWarning}`
+          : "Stopped";
         this.iconPath = new vscode.ThemeIcon(
           "circle-outline",
           new vscode.ThemeColor("disabledForeground"),
@@ -247,9 +303,14 @@ class JaegerNode extends vscode.TreeItem {
     }
 
     const showUrl = state === "running";
+    const hookStatus = hooksOn
+      ? hookSettingsOk
+        ? " — hooks enabled"
+        : " — hooks installed but chat.useHooks / chat.useClaudeHooks disabled in VS Code settings"
+      : "";
     this.tooltip = showUrl
-      ? `Jaeger (${state})\n${dashboardUrl}`
-      : `Jaeger (${state})`;
+      ? `Jaeger (${state})${hookStatus}\n${dashboardUrl}`
+      : `Jaeger (${state})${hookStatus}`;
     this.id = "jaeger-root";
   }
 }

@@ -31,7 +31,7 @@ Benefits:
 
 | # | Task | Files | Status |
 |---|------|-------|--------|
-| 1 | **Rewrite hook to OTLP JSON** — Replace `langfuse` SDK with zero-dep OTLP JSON construction + `urllib` HTTP POST. Map turns to OTel spans with Langfuse attribute conventions. Backward-compatible config fallback. | `langfuse_hook.py` | DONE |
+| 1 | **Rewrite hook to OTLP JSON** — Replace `langfuse` SDK with zero-dep OTLP JSON construction + `urllib` HTTP POST. Map turns to OTel spans with Langfuse attribute conventions. Backward-compatible config fallback. | `agent_tracing_hook.py` | DONE |
 | 2 | **Update config format with exporters** — `hookManager.ts` writes `exporters` array in `.langfuse_config.json` with OTLP endpoint + auth headers. Old fields kept for backward compat. | `hookManager.ts` | DONE |
 | 3 | **Remove pip install from setup** — Delete `ensurePythonLangfuse()` from `langfuseManager.ts` and remove the "Ensuring Python langfuse package" step from `setup()`. | `langfuseManager.ts` | DONE |
 | 4 | **Add `additionalExporters` VS Code setting** — Let users configure extra OTLP endpoints (Jaeger, etc.) via VS Code settings. Extension merges these with Langfuse exporter in config. | `package.json`, `hookManager.ts` | DONE |
@@ -53,12 +53,12 @@ Benefits:
 
 | # | Task | Files | Status |
 |---|------|-------|--------|
-| 13 | **Real timestamps** — VS Code: use tool.execution_start/complete timestamps for tool spans, user.message→last assistant.message for root/chat. Claude: per-message timestamps for all spans. | `langfuse_hook.py` | DONE |
-| 14 | **Token usage** — Extract `gen_ai.usage.input_tokens`/`output_tokens` from Claude `message.usage` (incl. cache_read). Per-subagent tokens from `toolUseResult.usage`. | `langfuse_hook.py` | DONE |
-| 15 | **Claude thinking** — Extract `{type:"thinking"}` content blocks into `gen_ai.reasoning` attribute on chat spans. | `langfuse_hook.py` | DONE |
-| 16 | **Rich messages** — Use `fmt_tool_call()`/`fmt_tool_result()` in `gen_ai.input.messages` for Claude, showing full tool call + result conversation per OTel message schema. | `langfuse_hook.py` | DONE |
-| 17 | **Nested subagents** — `Task`/`runSubagent` → `invoke_agent` child spans. Claude: parse `subagents/agent-{id}.jsonl` for grandchild chat + tool spans. VS Code: opaque span with real timestamps. | `langfuse_hook.py` | DONE |
-| 18 | **Env var rename** — Accept `AGENT_TRACING_ENABLED` alongside legacy `TRACE_TO_LANGFUSE`. Write both to settings.json. | `langfuse_hook.py`, `hookManager.ts` | DONE |
+| 13 | **Real timestamps** — VS Code: use tool.execution_start/complete timestamps for tool spans, user.message→last assistant.message for root/chat. Claude: per-message timestamps for all spans. | `agent_tracing_hook.py` | DONE |
+| 14 | **Token usage** — Extract `gen_ai.usage.input_tokens`/`output_tokens` from Claude `message.usage` (incl. cache_read). Per-subagent tokens from `toolUseResult.usage`. | `agent_tracing_hook.py` | DONE |
+| 15 | **Claude thinking** — Extract `{type:"thinking"}` content blocks into `gen_ai.reasoning` attribute on chat spans. | `agent_tracing_hook.py` | DONE |
+| 16 | **Rich messages** — Use `fmt_tool_call()`/`fmt_tool_result()` in `gen_ai.input.messages` for Claude, showing full tool call + result conversation per OTel message schema. | `agent_tracing_hook.py` | DONE |
+| 17 | **Nested subagents** — `Task`/`runSubagent` → `invoke_agent` child spans. Claude: parse `subagents/agent-{id}.jsonl` for grandchild chat + tool spans. VS Code: opaque span with real timestamps. | `agent_tracing_hook.py` | DONE |
+| 18 | **Env var rename** — Accept `AGENT_TRACING_ENABLED` alongside legacy `TRACE_TO_LANGFUSE`. Write both to settings.json. | `agent_tracing_hook.py`, `hookManager.ts` | DONE |
 | 19 | **Build check + push** | — | DONE |
 
 ---

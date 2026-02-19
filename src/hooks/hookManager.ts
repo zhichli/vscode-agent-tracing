@@ -10,7 +10,7 @@ import { JaegerManager } from "../stacks/jaegerManager";
  * ~/.claude/settings.json that works for both VS Code and Claude agents.
  *
  * File layout:
- *   ~/.claude/hooks/langfuse_hook.py          — shared script (installed once)
+ *   ~/.claude/hooks/agent_tracing_hook.py     — shared script (installed once)
  *   ~/.claude/hooks/.langfuse_config.json     — keys + log_dir
  *   ~/.claude/settings.json                   — single hook entry (env embedded) + root env
  *
@@ -37,6 +37,62 @@ export class HookManager {
   /** Whether the hook entry is currently installed. */
   isHookInstalled(): boolean {
     return this.detectHookInstalled();
+  }
+
+  /**
+   * Check whether the VS Code settings required for hooks to fire are enabled.
+   * Returns an object indicating which settings are missing.
+   * Also sets a context key so the view/title button can show/hide.
+   */
+  checkVSCodeHookSettings(): { useHooks: boolean; useClaudeHooks: boolean } {
+    const chatCfg = vscode.workspace.getConfiguration("chat");
+    const useHooks = chatCfg.get<boolean>("useHooks", false);
+    const useClaudeHooks = chatCfg.get<boolean>("useClaudeHooks", false);
+    const allOk = useHooks && useClaudeHooks;
+    vscode.commands.executeCommand("setContext", "agentTracing.hookSettingsMissing", !allOk);
+    return { useHooks, useClaudeHooks };
+  }
+
+  /**
+   * If required VS Code hook settings are disabled, show a notification
+   * offering to enable them. Returns true if settings were already fine
+   * or the user accepted the fix.
+   */
+  async promptEnableHookSettings(): Promise<boolean> {
+    const { useHooks, useClaudeHooks } = this.checkVSCodeHookSettings();
+    if (useHooks && useClaudeHooks) return true;
+
+    const missing: string[] = [];
+    if (!useHooks) missing.push("chat.useHooks");
+    if (!useClaudeHooks) missing.push("chat.useClaudeHooks");
+
+    const action = await vscode.window.showWarningMessage(
+      `Hooks won't fire until ${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} enabled in VS Code settings.`,
+      "Enable Now",
+      "Open Settings",
+      "Dismiss",
+    );
+
+    if (action === "Enable Now") {
+      const chatCfg = vscode.workspace.getConfiguration("chat");
+      if (!useHooks) {
+        await chatCfg.update("useHooks", true, vscode.ConfigurationTarget.Global);
+      }
+      if (!useClaudeHooks) {
+        await chatCfg.update("useClaudeHooks", true, vscode.ConfigurationTarget.Global);
+      }
+      this.output.info(`Enabled VS Code hook settings: ${missing.join(", ")}`);
+      // Update context key so the title bar button hides immediately
+      this.checkVSCodeHookSettings();
+      return true;
+    } else if (action === "Open Settings") {
+      await vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        missing[0],
+      );
+      return false;
+    }
+    return false;
   }
 
   /** Enable hooks (script must already exist). */
@@ -68,6 +124,10 @@ export class HookManager {
   // ---- shared script ----
 
   private get sharedScriptPath(): string {
+    return path.join(os.homedir(), ".claude", "hooks", "agent_tracing_hook.py");
+  }
+
+  private get legacySharedScriptPath(): string {
     return path.join(os.homedir(), ".claude", "hooks", "langfuse_hook.py");
   }
 
@@ -79,9 +139,10 @@ export class HookManager {
     const destDir = path.dirname(this.sharedScriptPath);
     fs.mkdirSync(destDir, { recursive: true });
 
-    const src = this.resourcePath("hooks", "langfuse_hook.py");
+    const src = this.resourcePath("hooks", "agent_tracing_hook.py");
     fs.copyFileSync(src, this.sharedScriptPath);
     fs.chmodSync(this.sharedScriptPath, 0o755);
+    this.safeUnlink(this.legacySharedScriptPath);
     this.output.info(`Installed shared hook script → ${this.sharedScriptPath}`);
   }
 
@@ -140,7 +201,11 @@ export class HookManager {
     return path.join(os.homedir(), ".claude", "settings.json");
   }
 
-  private static readonly HOOK_CMD = "python3 ~/.claude/hooks/langfuse_hook.py";
+  private static readonly HOOK_CMD = "python3 ~/.claude/hooks/agent_tracing_hook.py";
+  private static isManagedHookCommand(command?: string): boolean {
+    if (!command) return false;
+    return command.includes("agent_tracing_hook.py") || command.includes("langfuse_hook.py");
+  }
 
   /** Write / update the single hook entry + root env. */
   private writeHookConfig(): void {
@@ -164,7 +229,7 @@ export class HookManager {
     const existing = settings.hooks.Stop.find(
       (h: any) => {
         const entries = h.hooks ?? [h];
-        return entries.some((inner: any) => inner.command === cmd);
+        return entries.some((inner: any) => HookManager.isManagedHookCommand(inner.command));
       },
     );
 
@@ -172,7 +237,8 @@ export class HookManager {
       // Update env on inner hook object
       const entries = existing.hooks ?? [existing];
       for (const inner of entries) {
-        if (inner.command === cmd) {
+        if (HookManager.isManagedHookCommand(inner.command)) {
+          inner.command = cmd;
           inner.env = { ...envVars };
         }
       }
@@ -210,7 +276,7 @@ export class HookManager {
           (h: any) => {
             const entries = h.hooks ?? [h];
             return !entries.some(
-              (inner: any) => inner.command?.includes("langfuse_hook.py"),
+              (inner: any) => HookManager.isManagedHookCommand(inner.command),
             );
           },
         );
@@ -251,9 +317,7 @@ export class HookManager {
       return (settings.hooks?.Stop ?? []).some(
         (h: any) => {
           const entries = h.hooks ?? [h];
-          return entries.some(
-            (inner: any) => inner.command?.includes("langfuse_hook.py"),
-          );
+          return entries.some((inner: any) => HookManager.isManagedHookCommand(inner.command));
         },
       );
     } catch {

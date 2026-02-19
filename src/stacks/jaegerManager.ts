@@ -15,7 +15,28 @@ const JAEGER_DEFAULTS = {
   containerName: "agent-tracing-jaeger",
   /** Label used to identify our managed container. */
   label: "com.agent-tracing.managed",
+  /** Extension-maintained stack metadata. */
+  stackVersion: "1.0.0",
+  pinnedAt: "2026-02-18",
 } as const;
+
+function formatJaegerStackSummary(params: {
+  image: string;
+  tag: string;
+  uiPort: number;
+  otlpPort: number;
+  version: string;
+  pinnedAt: string;
+}): string {
+  const lines = [
+    `Stack Version: ${params.version}  (pinned ${params.pinnedAt})`,
+    "",
+    `  Jaeger All-in-One   ${params.image}:${params.tag}`,
+    `  UI Port             localhost:${params.uiPort}`,
+    `  OTLP HTTP Port      localhost:${params.otlpPort}`,
+  ];
+  return lines.join("\n");
+}
 
 /** Callback for reporting progress steps to the UI. */
 export type StepReporter = (message: string) => void;
@@ -152,6 +173,23 @@ export class JaegerManager {
     step("Jaeger container removed.");
   }
 
+  /** Recreate the Jaeger container (remove + start fresh). Data is in-memory so it's lost. */
+  async recreate(report?: StepReporter): Promise<void> {
+    const step = (msg: string) => { this.output.info(msg); report?.(msg); };
+    const name = JAEGER_DEFAULTS.containerName;
+
+    step("Removing existing Jaeger container…");
+    try {
+      await exec(`docker rm -f ${name}`, { timeout: 30_000 });
+    } catch {
+      // container may not exist
+    }
+
+    await this.start(report);
+    await this.waitForReady(30_000, report);
+    step("Jaeger container recreated.");
+  }
+
   /** Check if Jaeger UI is reachable. */
   async isRunning(): Promise<boolean> {
     try {
@@ -176,7 +214,7 @@ export class JaegerManager {
     // Reuse existing Jaeger tab if found
     for (const group of vscode.window.tabGroups.all) {
       const tabIndex = group.tabs.findIndex(
-        (t) => t.input === undefined && t.label.toLowerCase().includes("jaeger"),
+        (t) => t.input === undefined && (t.label.toLowerCase().includes("jaeger ui") || t.label.toLowerCase().includes("invoke_agent")),
       );
       if (tabIndex >= 0) {
         if (group.viewColumn !== undefined) {
@@ -199,6 +237,53 @@ export class JaegerManager {
   /** Open Jaeger UI in system browser. */
   async openDashboardExternal(): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(this.dashboardUrl));
+  }
+
+  /** Show a modal dialog with Jaeger stack and image version details. */
+  async showStackVersion(): Promise<void> {
+    const version = JAEGER_DEFAULTS.stackVersion;
+    const pinnedAt = JAEGER_DEFAULTS.pinnedAt;
+    const image = JAEGER_DEFAULTS.image;
+    const tag = JAEGER_DEFAULTS.tag;
+
+    const detail = [
+      `Jaeger All-in-One: ${image}:${tag}`,
+      `UI: http://localhost:${this.uiPort}`,
+      `OTLP HTTP: http://localhost:${this.otlpPort}/v1/traces`,
+    ].join("\n");
+
+    const action = await vscode.window.showInformationMessage(
+      `Jaeger Stack v${version}  (pinned ${pinnedAt})`,
+      { modal: true, detail },
+      { title: "Copy to Clipboard" },
+      { title: "Show in Output" },
+      { title: "Cancel", isCloseAffordance: true },
+    );
+
+    if (action?.title === "Copy to Clipboard") {
+      await vscode.env.clipboard.writeText(
+        formatJaegerStackSummary({
+          image,
+          tag,
+          uiPort: this.uiPort,
+          otlpPort: this.otlpPort,
+          version,
+          pinnedAt,
+        }),
+      );
+    } else if (action?.title === "Show in Output") {
+      this.output.info(
+        formatJaegerStackSummary({
+          image,
+          tag,
+          uiPort: this.uiPort,
+          otlpPort: this.otlpPort,
+          version,
+          pinnedAt,
+        }),
+      );
+      this.output.show(true);
+    }
   }
 
   /** URL pointing to the search/traces view. */

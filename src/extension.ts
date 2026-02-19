@@ -56,6 +56,19 @@ export function activate(context: vscode.ExtensionContext) {
     output,
   );
 
+  // Set initial context key for hook settings button visibility
+  hookManager.checkVSCodeHookSettings();
+
+  // Update context key when chat.* settings change
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("chat.useHooks") || e.affectsConfiguration("chat.useClaudeHooks")) {
+        hookManager.checkVSCodeHookSettings();
+        provider.refresh();
+      }
+    }),
+  );
+
   // --- Commands ---
 
   context.subscriptions.push(
@@ -113,6 +126,9 @@ export function activate(context: vscode.ExtensionContext) {
 
             flashStatus("Setup complete");
             sendEvent("setup/complete", { mode: "managed" });
+
+            // Prompt user to enable VS Code hook settings if needed
+            await hookManager.promptEnableHookSettings();
           } catch (e: any) {
             vscode.window.showErrorMessage(
               `Setup failed: ${e.message}`,
@@ -143,6 +159,8 @@ export function activate(context: vscode.ExtensionContext) {
               await new Promise((r) => setTimeout(r, 1000));
             }
             provider.refresh();
+            // Prompt user to enable VS Code hook settings if needed
+            await hookManager.promptEnableHookSettings();
           },
         );
         flashStatus("Langfuse started");
@@ -202,6 +220,7 @@ export function activate(context: vscode.ExtensionContext) {
         sendEvent("stack/recreate");
         provider.refresh();
         await langfuse.openDashboard();
+        await hookManager.promptEnableHookSettings();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to recreate stack: ${e.message}`);
       }
@@ -264,6 +283,16 @@ export function activate(context: vscode.ExtensionContext) {
       provider.refresh();
     }),
 
+    // Enable VS Code hook settings (chat.useHooks + chat.useClaudeHooks)
+    vscode.commands.registerCommand("agentTracing.enableHookSettings", async () => {
+      try {
+        await hookManager.promptEnableHookSettings();
+        provider.refresh();
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to enable hook settings: ${e.message}`);
+      }
+    }),
+
     // Enable hooks
     vscode.commands.registerCommand("agentTracing.enableHook", async () => {
       try {
@@ -271,6 +300,8 @@ export function activate(context: vscode.ExtensionContext) {
         provider.refresh();
         flashStatus("Hooks enabled — tracing active");
         sendEvent("hook/enable");
+        // Prompt user to enable VS Code hook settings if needed
+        await hookManager.promptEnableHookSettings();
       } catch (e: any) {
         vscode.window.showErrorMessage(`Failed to enable hooks: ${e.message}`);
       }
@@ -361,7 +392,10 @@ export function activate(context: vscode.ExtensionContext) {
       flashStatus("Connected to external Langfuse");
       sendEvent("connect/external");
 
-      // 6. Open dashboard
+      // 7. Prompt user to enable VS Code hook settings if needed
+      await hookManager.promptEnableHookSettings();
+
+      // 8. Open dashboard
       await langfuse.openDashboard();
     }),
 
@@ -412,6 +446,7 @@ export function activate(context: vscode.ExtensionContext) {
             await jaeger.openDashboard();
             flashStatus("Jaeger started");
             sendEvent("jaeger/setup");
+            await hookManager.promptEnableHookSettings();
           } catch (e: any) {
             vscode.window.showErrorMessage(`Jaeger setup failed: ${e.message}`);
             sendError("jaeger/setup-failed", { error: e.message });
@@ -459,6 +494,30 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    // Jaeger: Recreate (remove + start fresh)
+    vscode.commands.registerCommand("agentTracing.jaeger.recreate", async () => {
+      const confirm = await confirmModal(
+        "This will recreate the Jaeger container",
+        "The container will be removed and recreated. Jaeger stores traces in memory, so existing trace data will be lost.",
+        "Recreate",
+      );
+      if (!confirm) return;
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, cancellable: false },
+          async (progress) => {
+            await jaeger.recreate((msg) => progress.report({ message: msg }));
+            provider.refresh();
+          },
+        );
+        flashStatus("Jaeger recreated");
+        sendEvent("jaeger/recreate");
+        await jaeger.openDashboard();
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Failed to recreate Jaeger: ${e.message}`);
+      }
+    }),
+
     // Jaeger: Delete (remove container)
     vscode.commands.registerCommand("agentTracing.jaeger.purge", async () => {
       const confirm = await confirmModal(
@@ -493,6 +552,12 @@ export function activate(context: vscode.ExtensionContext) {
       sendEvent("jaeger/dashboard", { target: "external" });
       await jaeger.openDashboardExternal();
     }),
+
+    // Jaeger: Show stack version info
+    vscode.commands.registerCommand("agentTracing.jaeger.showStackVersion", async () => {
+      sendEvent("jaeger/stack-version");
+      await jaeger.showStackVersion();
+    }),
   );
 
   // Auto-start if configured
@@ -505,6 +570,7 @@ export function activate(context: vscode.ExtensionContext) {
       .then(async () => {
         await hookManager.installAll();
         provider.refresh();
+        await hookManager.promptEnableHookSettings();
       })
       .catch((e: any) => {
         output.warn(`Auto-start failed: ${e.message}`);
@@ -531,6 +597,13 @@ async function checkAndNudge(
 
     const installed = hookManager.isHookInstalled();
     if (!installed) return;
+
+    // Check VS Code hook settings — prompt if disabled even while stack is running
+    const { useHooks, useClaudeHooks } = hookManager.checkVSCodeHookSettings();
+    if (!useHooks || !useClaudeHooks) {
+      await hookManager.promptEnableHookSettings();
+      await context.globalState.update("nudge.lastShown", Date.now());
+    }
 
     const running = await langfuse.isRunning();
     if (running) return;
