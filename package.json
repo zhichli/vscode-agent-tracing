@@ -73,21 +73,21 @@
       {
         "command": "agentTracing.stopStack",
         "category": "Agent Tracing",
-        "title": "Stop Stack",
+        "title": "Stack: Stop",
         "shortTitle": "Stop Langfuse stack (data preserved)",
         "icon": "$(primitive-square)"
       },
       {
         "command": "agentTracing.recreateStack",
         "category": "Agent Tracing",
-        "title": "Recreate Stack",
+        "title": "Stack: Recreate",
         "shortTitle": "Recreate — rebuild containers, keep trace data",
         "icon": "$(debug-restart)"
       },
       {
         "command": "agentTracing.purgeStack",
         "category": "Agent Tracing",
-        "title": "Delete Stack",
+        "title": "Stack: Delete",
         "shortTitle": "Delete — remove containers + all trace data",
         "icon": "$(trash)"
       },
@@ -101,16 +101,16 @@
       {
         "command": "agentTracing.openDashboardExternal",
         "category": "Agent Tracing",
-        "title": "Open Dashboard (External Browser)",
+        "title": "Dashboard: Open in External Browser",
         "shortTitle": "Open Langfuse dashboard in system browser",
         "icon": "$(link-external)"
       },
       {
         "command": "agentTracing.showLoginInfo",
         "category": "Agent Tracing",
-        "title": "Login Info",
+        "title": "Info: Login Credentials",
         "shortTitle": "Show Langfuse login email and password",
-        "icon": "$(key)"
+        "icon": "$(account)"
       },
       {
         "command": "agentTracing.refresh",
@@ -122,15 +122,15 @@
       {
         "command": "agentTracing.enableHook",
         "category": "Agent Tracing",
-        "title": "Enable Hooks",
-        "shortTitle": "Enable tracing hooks for all agents",
+        "title": "Hook: Install",
+        "shortTitle": "Install tracing hooks in ~/.claude/settings.json",
         "icon": "$(plug)"
       },
       {
         "command": "agentTracing.disableHook",
         "category": "Agent Tracing",
-        "title": "Disable Hooks",
-        "shortTitle": "Disable tracing hooks (script stays on disk)",
+        "title": "Hook: Uninstall",
+        "shortTitle": "Remove tracing hooks from ~/.claude/settings.json",
         "icon": "$(debug-disconnect)"
       },
       {
@@ -143,23 +143,30 @@
       {
         "command": "agentTracing.disconnect",
         "category": "Agent Tracing",
-        "title": "Disconnect External Langfuse",
+        "title": "Dashboard: Disconnect",
         "shortTitle": "Disconnect from external Langfuse",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "agentTracing.showStackVersion",
         "category": "Agent Tracing",
-        "title": "Stack Info",
+        "title": "Info: Stack Versions",
         "shortTitle": "Show pinned Docker image versions",
         "icon": "$(info)"
       },
       {
+        "command": "agentTracing.enableHookSettings",
+        "category": "Agent Tracing",
+        "title": "Hook: Enable VS Code Settings",
+        "shortTitle": "Enable chat.useHooks & chat.useClaudeHooks",
+        "icon": "$(gear)"
+      },
+      {
         "command": "agentTracing.showHookLog",
         "category": "Agent Tracing",
-        "title": "Show Hook Log",
+        "title": "Hook: Show Log",
         "shortTitle": "Open the hook script log for debugging",
-        "icon": "$(output)"
+        "icon": "$(file-text)"
       },
       {
         "command": "agentTracing.jaeger.setup",
@@ -178,16 +185,23 @@
       {
         "command": "agentTracing.jaeger.stop",
         "category": "Agent Tracing",
-        "title": "Stop Jaeger",
+        "title": "Stack: Stop",
         "shortTitle": "Stop the Jaeger container",
         "icon": "$(primitive-square)"
       },
       {
         "command": "agentTracing.jaeger.purge",
         "category": "Agent Tracing",
-        "title": "Delete Jaeger",
+        "title": "Stack: Delete",
         "shortTitle": "Remove Jaeger container and data",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agentTracing.jaeger.recreate",
+        "category": "Agent Tracing",
+        "title": "Stack: Recreate",
+        "shortTitle": "Recreate Jaeger container",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "agentTracing.jaeger.openDashboard",
@@ -199,17 +213,44 @@
       {
         "command": "agentTracing.jaeger.openDashboardExternal",
         "category": "Agent Tracing",
-        "title": "Open Jaeger Dashboard (External Browser)",
+        "title": "Dashboard: Open in External Browser",
         "shortTitle": "Open Jaeger UI in system browser",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "agentTracing.jaeger.showStackVersion",
+        "category": "Agent Tracing",
+        "title": "Info: Jaeger Stack Versions",
+        "shortTitle": "Show Jaeger image and endpoint versions",
+        "icon": "$(info)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "agentTracing.enableHook",
+          "when": "view == agentTracing.solutions && !agentTracing.hooksInstalled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "agentTracing.disableHook",
+          "when": "view == agentTracing.solutions && agentTracing.hooksInstalled",
+          "group": "navigation@0"
+        },
+        {
+          "command": "agentTracing.enableHookSettings",
+          "when": "view == agentTracing.solutions && agentTracing.hookSettingsMissing",
+          "group": "navigation@1"
+        },
+        {
           "command": "agentTracing.refresh",
           "when": "view == agentTracing.solutions",
-          "group": "navigation@1"
+          "group": "navigation@9"
+        },
+        {
+          "command": "agentTracing.showHookLog",
+          "when": "view == agentTracing.solutions",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -224,8 +265,8 @@
           "group": "inline@1"
         },
         {
-          "command": "agentTracing.enableHook",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-off$/",
+          "command": "agentTracing.enableHookSettings",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-.*hooks-settings-off$/",
           "group": "inline@0"
         },
         {
@@ -234,59 +275,14 @@
           "group": "inline@1"
         },
         {
-          "command": "agentTracing.disableHook",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-on$/",
-          "group": "langfuse@5"
-        },
-        {
-          "command": "agentTracing.enableHook",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running.*hooks-off$/",
-          "group": "langfuse@5"
-        },
-        {
-          "command": "agentTracing.stopStack",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
-          "group": "inline@3"
-        },
-        {
-          "command": "agentTracing.disconnect",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-external/",
-          "group": "inline@3"
-        },
-        {
-          "command": "agentTracing.openDashboardExternal",
-          "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
-          "group": "langfuse@1"
-        },
-        {
-          "command": "agentTracing.disconnect",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-external/",
-          "group": "langfuse@2"
-        },
-        {
           "command": "agentTracing.showLoginInfo",
           "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
-          "group": "langfuse@3"
+          "group": "inline@2"
         },
         {
-          "command": "agentTracing.showStackVersion",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
-          "group": "langfuse@4"
-        },
-        {
-          "command": "agentTracing.showHookLog",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running|stopped)/",
-          "group": "langfuse@6"
-        },
-        {
-          "command": "agentTracing.recreateStack",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
-          "group": "langfuse-danger@1"
-        },
-        {
-          "command": "agentTracing.purgeStack",
-          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
-          "group": "langfuse-danger@2"
+          "command": "agentTracing.disconnect",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-external/",
+          "group": "inline@3"
         },
         {
           "command": "agentTracing.startStack",
@@ -294,14 +290,39 @@
           "group": "inline@1"
         },
         {
-          "command": "agentTracing.disableHook",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-on",
-          "group": "langfuse@5"
+          "command": "agentTracing.openDashboardExternal",
+          "when": "view == agentTracing.solutions && viewItem =~ /langfuse-running/",
+          "group": "lf-1-browse@1"
         },
         {
-          "command": "agentTracing.enableHook",
-          "when": "view == agentTracing.solutions && viewItem == langfuse-stopped-hooks-off",
-          "group": "langfuse@5"
+          "command": "agentTracing.disconnect",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-external/",
+          "group": "lf-1-browse@2"
+        },
+        {
+          "command": "agentTracing.showStackVersion",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
+          "group": "lf-2-info@1"
+        },
+        {
+          "command": "agentTracing.enableHookSettings",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-.*hooks-settings-off$/",
+          "group": "lf-3-hooks@1"
+        },
+        {
+          "command": "agentTracing.stopStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-running-hooks/",
+          "group": "lf-4-danger@1"
+        },
+        {
+          "command": "agentTracing.recreateStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
+          "group": "lf-4-danger@2"
+        },
+        {
+          "command": "agentTracing.purgeStack",
+          "when": "view == agentTracing.solutions && viewItem =~ /^langfuse-(running-hooks|stopped)/",
+          "group": "lf-4-danger@3"
         },
         {
           "command": "agentTracing.jaeger.setup",
@@ -319,24 +340,39 @@
           "group": "inline@1"
         },
         {
-          "command": "agentTracing.jaeger.stop",
-          "when": "view == agentTracing.solutions && viewItem == jaeger-running",
-          "group": "inline@2"
+          "command": "agentTracing.jaeger.start",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-stopped",
+          "group": "inline@1"
         },
         {
           "command": "agentTracing.jaeger.openDashboardExternal",
           "when": "view == agentTracing.solutions && viewItem == jaeger-running",
-          "group": "jaeger@1"
+          "group": "jg-1-browse@1"
+        },
+        {
+          "command": "agentTracing.jaeger.showStackVersion",
+          "when": "view == agentTracing.solutions && viewItem =~ /^jaeger-(running|stopped)/",
+          "group": "jg-2-info@1"
+        },
+        {
+          "command": "agentTracing.enableHookSettings",
+          "when": "view == agentTracing.solutions && agentTracing.hookSettingsMissing && viewItem =~ /^jaeger-(running|stopped)/",
+          "group": "jg-3-hooks@1"
+        },
+        {
+          "command": "agentTracing.jaeger.stop",
+          "when": "view == agentTracing.solutions && viewItem == jaeger-running",
+          "group": "jg-4-danger@1"
+        },
+        {
+          "command": "agentTracing.jaeger.recreate",
+          "when": "view == agentTracing.solutions && viewItem =~ /^jaeger-(running|stopped)/",
+          "group": "jg-4-danger@2"
         },
         {
           "command": "agentTracing.jaeger.purge",
           "when": "view == agentTracing.solutions && viewItem =~ /^jaeger-(running|stopped)/",
-          "group": "jaeger-danger@1"
-        },
-        {
-          "command": "agentTracing.jaeger.start",
-          "when": "view == agentTracing.solutions && viewItem == jaeger-stopped",
-          "group": "inline@1"
+          "group": "jg-4-danger@3"
         }
       ]
     },
@@ -406,8 +442,11 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.100.0",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
     "@vscode/vsce": "^3.2.0",
     "esbuild": "^0.24.0",
+    "eslint": "^10.0.0",
     "typescript": "^5.7.0"
   },
   "dependencies": {
