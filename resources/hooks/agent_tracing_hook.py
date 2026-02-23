@@ -6,7 +6,7 @@ Emits standard OpenTelemetry (OTLP JSON) traces following the GenAI semantic
 conventions (https://opentelemetry.io/docs/specs/semconv/gen-ai/) to any
 configured backend (Langfuse, Jaeger, Honeycomb, Grafana Tempo, Datadog, etc.).
 
-Shared by both VS Code Copilot Chat and Claude Code. Detects the calling
+Shared by both VS Code Copilot Chat and Claude. Detects the calling
 agent at runtime via stdin format:
   - VS Code: stdin contains {"hookEventName": ..., "transcript_path": ..., "sessionId": ...}
   - Claude:  stdin contains {"hook_event_name": "Stop", "session_id": ..., "transcript_path": ...}
@@ -40,8 +40,8 @@ OTEL_SERVICE_NAME = "agent-tracing"
 EXPORT_TIMEOUT_SEC = 10
 
 AGENT_META = {
-    "github-copilot-chat": {"provider": "openai", "agent_name": "GitHub Copilot", "default_model": "copilot-agent", "environment": "github-copilot-chat"},
-    "claude": {"provider": "anthropic", "agent_name": "Claude Code", "default_model": "claude-sonnet-4-20250514", "environment": "claude"},
+    "github-copilot-chat": {"provider": "openai", "agent_name": "GitHub Copilot Chat", "default_model": "copilot-agent", "environment": "github-copilot-chat"},
+    "claude": {"provider": "anthropic", "agent_name": "Claude", "default_model": "claude-sonnet-4-20250514", "environment": "claude"},
 }
 
 # ---------------------------------------------------------------------------
@@ -403,7 +403,7 @@ def process_vscode(exporters: List[dict], hook_input: dict) -> int:
     save_state(agent, state); return created
 
 # ===========================================================================
-# Claude Code
+# Claude
 # ===========================================================================
 def get_content(msg: dict) -> Any:
     if isinstance(msg, dict):

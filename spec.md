@@ -2,7 +2,7 @@
 
 ## One-Line Definition
 
-> **A VS Code extension that gives AI coding agents (GitHub Copilot Chat, Claude Code) local-first observability through one-click tracing setup with pluggable OTel backends.**
+> **A VS Code extension that gives AI coding agents (GitHub Copilot Chat, Claude) local-first observability through one-click tracing setup with pluggable OTel backends.**
 
 ## Top Principles
 
@@ -21,7 +21,7 @@ Agent Session                    Hook Script (Python, stdlib only)         Backe
 ─────────────                    ─────────────────────────────────         ────────
 VS Code Copilot ──Stop event──►  agent_tracing_hook.py              ┌──► Langfuse (OTLP)
                      │           ├─ reads stdin JSON                │
-Claude Code ─────Stop event──►  ├─ reads transcript JSONL          ├──► Jaeger (OTLP)
+Claude ──────────Stop event──►  ├─ reads transcript JSONL          ├──► Jaeger (OTLP)
                      │           ├─ groups messages into turns      │
                      │           ├─ maps to OTel GenAI spans        ├──► Honeycomb (OTLP)
                      │           ├─ POST OTLP JSON to exporters ───┤
@@ -90,7 +90,7 @@ Single container, zero auth, OTLP enabled by default.
 
 ### Hook Registration
 
-Single entry in `~/.claude/settings.json`, serves both VS Code Copilot and Claude Code:
+Single entry in `~/.claude/settings.json`, serves both VS Code Copilot Chat and Claude:
 
 ```json
 {
@@ -141,7 +141,7 @@ Legacy `public_key`/`secret_key`/`host` fields are kept for backward compat. The
 
 ### Agent Detection
 
-| Field | VS Code Copilot | Claude Code |
+| Field | VS Code Copilot Chat | Claude |
 |-------|-----------------|-------------|
 | stdin key | `hookEventName` (camelCase) | `hook_event_name` (snake_case) |
 | session ID | `sessionId` | `session_id` |
@@ -227,7 +227,7 @@ Subagent invocations are nested `invoke_agent` spans within the same trace, not 
 | OTel Attribute | VS Code Source | Claude Source |
 |---|---|---|
 | `gen_ai.operation.name` | `"invoke_agent"` | `"invoke_agent"` |
-| `gen_ai.agent.name` | `"GitHub Copilot"` | `"Claude Code"` |
+| `gen_ai.agent.name` | `"GitHub Copilot Chat"` | `"Claude"` |
 | `gen_ai.provider.name` | `"openai"` | `"anthropic"` |
 | `gen_ai.conversation.id` | `sessionId` from stdin | `session_id` from stdin |
 | `gen_ai.request.model` | ❌ not available | ✅ `message.model` |
@@ -294,7 +294,7 @@ tool.execution_complete:
 - `success` boolean
 - **No subagent-internal transcript** — VS Code does not expose what the subagent did internally (its tool calls, reasoning, etc.)
 
-#### Claude Code — `Task`
+#### Claude — `Task`
 
 In the Claude transcript, subagents appear as `tool_use` with `name: "Task"` in the parent. The result comes back as `tool_result` with rich `toolUseResult` metadata:
 
@@ -355,7 +355,7 @@ Per the [OTel GenAI Agent Spans](https://opentelemetry.io/docs/specs/semconv/gen
 
 **Target span hierarchy with subagents:**
 ```
-invoke_agent GitHub Copilot          ← or Claude Code
+invoke_agent GitHub Copilot Chat      ← or Claude
 ├── chat copilot-agent
 ├── invoke_agent "Count hello"       ← subagent (was execute_tool runSubagent)
 │   ├── gen_ai.agent.id = "a9fc150"
@@ -421,9 +421,9 @@ Triggered by the VS Code hooks system. Stdin provides `{hookEventName, sessionId
 
 **Not available from Copilot**: model name, token counts, stop_reason.
 
-### Claude Code — JSONL Messages
+### Claude — JSONL Messages
 
-Triggered by Claude Code's hooks system. Stdin provides `{hook_event_name, session_id, transcript_path, cwd, stop_hook_active}`.
+Triggered by Claude's hooks system. Stdin provides `{hook_event_name, session_id, transcript_path, cwd, stop_hook_active}`.
 
 | Message type | Key data | Used by hook? |
 |---|---|---|
@@ -475,7 +475,7 @@ Triggered by Claude Code's hooks system. Stdin provides `{hook_event_name, sessi
 | Windows (WSL) | Supported |
 | Windows (native) | Future |
 | VS Code forks (Cursor, Windsurf) | Future |
-| GitHub Copilot Chat + Claude Code | Primary |
+| GitHub Copilot Chat + Claude | Primary |
 | Other agents (Cline, Roo) | Future |
 | Langfuse (self-hosted Docker) | ✅ Shipped |
 | Langfuse (cloud) | Future |
