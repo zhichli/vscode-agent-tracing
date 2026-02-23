@@ -718,6 +718,23 @@ def build_claude_turn_spans(session_id: str, turn_num: int, turn: dict, agent: s
     return spans
 
 
+def _read_and_group_claude(tf: Path, last_line: int, turn_count: int) -> tuple:
+    """Read transcript, parse messages, return (lines, total, messages, all_turns, new_turns)."""
+    lines = tf.read_text().strip().split("\n")
+    total = len(lines)
+    if last_line >= total:
+        return lines, total, [], [], []
+    messages = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped: continue
+        try: messages.append(json.loads(stripped))
+        except json.JSONDecodeError: continue
+    all_turns = group_claude_turns(messages)
+    new_turns = all_turns[turn_count:]
+    return lines, total, messages, all_turns, new_turns
+
+
 def process_claude(exporters: List[dict], hook_input: dict) -> int:
     agent = "claude"
     session_id = hook_input.get("session_id", "")
@@ -730,20 +747,22 @@ def process_claude(exporters: List[dict], hook_input: dict) -> int:
     state = load_state(agent)
     ss = state.get(session_id, {})
     last_line, turn_count = ss.get("last_line", 0), ss.get("turn_count", 0)
-    lines = tf.read_text().strip().split("\n")
-    total = len(lines)
-    if last_line >= total: return 0
 
-    messages = []
-    for line in lines:
-        line = line.strip()
-        if not line: continue
-        try: messages.append(json.loads(line))
-        except json.JSONDecodeError: continue
+    # The Stop hook may fire before the transcript is fully flushed.
+    # Poll briefly for the file to contain at least one complete turn.
+    max_wait, interval = 3.0, 0.5
+    waited = 0.0
+    lines, total, messages, all_turns, new_turns = _read_and_group_claude(tf, last_line, turn_count)
+    while not new_turns and waited < max_wait:
+        time.sleep(interval)
+        waited += interval
+        lines, total, messages, all_turns, new_turns = _read_and_group_claude(tf, last_line, turn_count)
+    if waited > 0:
+        debug(f"Waited {waited:.1f}s for transcript to settle ({total} line(s))", agent, session_id)
+
+    if last_line >= total: return 0
     if not messages: return 0
 
-    all_turns = group_claude_turns(messages)
-    new_turns = all_turns[turn_count:]
     if not new_turns:
         state[session_id] = {"last_line": total, "turn_count": len(all_turns), "updated": datetime.now(timezone.utc).isoformat()}
         save_state(agent, state); return 0
